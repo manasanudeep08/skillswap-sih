@@ -695,6 +695,16 @@ function SkillVerificationCard({
    QUIZ
    ========================================================= */
 
+/* =========================================================
+   QUIZ
+   ========================================================= */
+
+type QuizQuestion = {
+  question: string;
+  options: string[];
+  answer: number;
+};
+
 function Quiz({
   skill,
   user,
@@ -706,20 +716,66 @@ function Quiz({
   onComplete: (skill: Skill) => void;
   onBack: () => void;
 }) {
-  const questions = getQuestions(skill.name);
-
+  const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<number[]>([]);
+  const [loadingQuiz, setLoadingQuiz] = useState(true);
+  const [quizError, setQuizError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const question = questions[currentQuestion];
+  useEffect(() => {
+    generateQuiz();
+  }, [skill.name]);
+
+  async function generateQuiz() {
+    setLoadingQuiz(true);
+    setQuizError("");
+
+    try {
+      const response = await fetch("/api/quiz/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          skill: skill.name,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error || "Unable to generate quiz."
+        );
+      }
+
+      if (
+        !data.questions ||
+        !Array.isArray(data.questions) ||
+        data.questions.length !== 5
+      ) {
+        throw new Error("AI returned an invalid quiz.");
+      }
+
+      setQuestions(data.questions);
+      setAnswers([]);
+      setCurrentQuestion(0);
+    } catch (error) {
+      console.error("Quiz generation error:", error);
+
+      setQuizError(
+        "We couldn't generate your quiz right now. Please try again."
+      );
+    } finally {
+      setLoadingQuiz(false);
+    }
+  }
 
   function selectAnswer(answer: number) {
     setAnswers((current) => {
       const updated = [...current];
-
       updated[currentQuestion] = answer;
-
       return updated;
     });
   }
@@ -739,14 +795,15 @@ function Quiz({
   }
 
   async function finishQuiz() {
-    if (!user) return;
+    if (!user || questions.length === 0) return;
 
     setSubmitting(true);
 
     const correctAnswers = questions.reduce(
       (score, question, index) => {
-        return score +
-          (answers[index] === question.answer ? 1 : 0);
+        return score + (
+          answers[index] === question.answer ? 1 : 0
+        );
       },
       0
     );
@@ -775,7 +832,9 @@ function Quiz({
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error || "Unable to save quiz result.");
+        alert(
+          data.error || "Unable to save quiz result."
+        );
         return;
       }
 
@@ -788,99 +847,157 @@ function Quiz({
       }
 
       onComplete(data.skill);
-
     } catch (error) {
-      console.error(error);
+      console.error("Quiz result error:", error);
       alert("Something went wrong while saving your result.");
     } finally {
       setSubmitting(false);
     }
   }
 
+  if (loadingQuiz) {
+    return (
+      <div className="mt-7 rounded-2xl border border-white bg-white/70 p-8 shadow-sm backdrop-blur-xl">
+        <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-violet-100 text-violet-600">
+            <Sparkles
+              size={28}
+              className="animate-pulse"
+            />
+          </div>
+
+          <h3 className="mt-5 text-xl font-black">
+            Creating your quiz...
+          </h3>
+
+          <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">
+            Our AI is creating questions specifically
+            for <span className="font-bold">{skill.name}</span>.
+          </p>
+
+          <div className="mt-5 h-2 w-48 overflow-hidden rounded-full bg-zinc-100">
+            <div className="h-full w-1/2 animate-pulse rounded-full bg-violet-600" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (quizError) {
+    return (
+      <div className="mt-7 rounded-2xl border border-white bg-white/70 p-8 shadow-sm backdrop-blur-xl">
+        <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-red-100 text-red-600">
+            <Sparkles size={28} />
+          </div>
+
+          <h3 className="mt-5 text-xl font-black">
+            Couldn't create the quiz
+          </h3>
+
+          <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">
+            {quizError}
+          </p>
+
+          <div className="mt-6 flex gap-3">
+            <button
+              onClick={onBack}
+              className="rounded-xl border border-white bg-white px-5 py-3 text-sm font-bold text-zinc-600 transition hover:bg-zinc-50"
+            >
+              Back
+            </button>
+
+            <button
+              onClick={generateQuiz}
+              className="rounded-xl bg-violet-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-violet-300/30 transition hover:-translate-y-0.5 hover:bg-violet-700"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const question = questions[currentQuestion];
+
+  if (!question) {
+    return null;
+  }
+
   return (
-    <div className="mt-7 rounded-2xl border border-white bg-white/70 p-6 shadow-sm">
-
+    <div className="mt-7 rounded-2xl border border-white bg-white/70 p-6 shadow-sm backdrop-blur-xl">
       <div className="flex items-center justify-between">
-
         <div>
-
-          <p className="text-xs font-black tracking-widest text-indigo-600">
-            SKILLSWAP QUIZ
+          <p className="flex items-center gap-2 text-xs font-black tracking-widest text-indigo-600">
+            <Sparkles size={14} />
+            AI SKILLSWAP QUIZ
           </p>
 
           <h3 className="mt-1 text-xl font-black">
             {skill.name}
           </h3>
 
+          <p className="mt-1 text-xs text-zinc-400">
+            Questions generated specifically for your skill
+          </p>
         </div>
 
         <span className="text-sm font-bold text-zinc-400">
           {currentQuestion + 1}/{questions.length}
         </span>
-
       </div>
 
-
-      {/* PROGRESS */}
-
       <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-100">
-
         <div
           className="h-full rounded-full bg-violet-600 transition-all duration-300"
           style={{
-            width: `${((currentQuestion + 1) / questions.length) * 100}%`,
+            width: `${
+              ((currentQuestion + 1) / questions.length) * 100
+            }%`,
           }}
         />
-
       </div>
 
-
-      {/* QUESTION */}
-
       <div className="mt-7">
-
         <p className="text-lg font-black leading-7">
           {question.question}
         </p>
 
-
         <div className="mt-5 space-y-3">
-
           {question.options.map((option, index) => {
-
             const selected =
               answers[currentQuestion] === index;
 
             return (
               <button
-                key={option}
+                key={`${option}-${index}`}
                 onClick={() => selectAnswer(index)}
+                disabled={submitting}
                 className={`w-full rounded-xl border p-4 text-left text-sm font-semibold transition ${
                   selected
                     ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
                     : "border-white bg-zinc-50/70 text-zinc-600 hover:bg-white hover:shadow-sm"
                 }`}
               >
-                <span className="mr-3 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-white text-xs font-black shadow-sm">
+                <span
+                  className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black shadow-sm ${
+                    selected
+                      ? "bg-violet-600 text-white"
+                      : "bg-white text-zinc-600"
+                  }`}
+                >
                   {String.fromCharCode(65 + index)}
                 </span>
 
                 {option}
-
               </button>
             );
-
           })}
-
         </div>
-
       </div>
 
-
-      {/* BUTTONS */}
-
       <div className="mt-7 flex justify-between gap-3">
-
         <button
           onClick={onBack}
           disabled={submitting}
@@ -889,13 +1006,11 @@ function Quiz({
           Back
         </button>
 
-
         <button
           onClick={nextQuestion}
           disabled={submitting}
           className="flex items-center gap-2 rounded-xl bg-zinc-950 px-5 py-3 text-sm font-bold text-white transition hover:bg-zinc-800 disabled:opacity-50"
         >
-
           {submitting
             ? "Saving..."
             : currentQuestion === questions.length - 1
@@ -903,166 +1018,8 @@ function Quiz({
               : "Next"}
 
           {!submitting && <ArrowRight size={16} />}
-
         </button>
-
       </div>
-
     </div>
   );
-}
-
-
-/* =========================================================
-   QUIZ QUESTIONS
-   ========================================================= */
-
-function getQuestions(skillName: string) {
-  const skill = skillName.toLowerCase();
-
-  if (skill.includes("python")) {
-    return [
-      {
-        question: "Which keyword is used to define a function in Python?",
-        options: ["function", "def", "func", "define"],
-        answer: 1,
-      },
-      {
-        question: "Which data type stores an ordered collection that can be changed?",
-        options: ["Tuple", "String", "List", "Set"],
-        answer: 2,
-      },
-      {
-        question: "What does len() return?",
-        options: [
-          "The type of an object",
-          "The number of items",
-          "The memory address",
-          "The last item",
-        ],
-        answer: 1,
-      },
-      {
-        question: "Which symbol starts a comment in Python?",
-        options: ["//", "#", "/*", "--"],
-        answer: 1,
-      },
-      {
-        question: "Which keyword is used to create a class?",
-        options: ["object", "struct", "class", "new"],
-        answer: 2,
-      },
-    ];
-  }
-
-  if (
-    skill.includes("video") ||
-    skill.includes("editing")
-  ) {
-    return [
-      {
-        question: "What does FPS usually stand for in video?",
-        options: [
-          "Frames Per Second",
-          "File Processing System",
-          "Frame Pixel Size",
-          "Film Processing Speed",
-        ],
-        answer: 0,
-      },
-      {
-        question: "What is a timeline mainly used for?",
-        options: [
-          "Writing code",
-          "Arranging media over time",
-          "Creating passwords",
-          "Exporting images",
-        ],
-        answer: 1,
-      },
-      {
-        question: "What does a video transition do?",
-        options: [
-          "Deletes a clip",
-          "Changes the resolution",
-          "Connects one shot to another",
-          "Adds subtitles automatically",
-        ],
-        answer: 2,
-      },
-      {
-        question: "What does rendering a video generally mean?",
-        options: [
-          "Processing the project into an output",
-          "Deleting unused files",
-          "Recording audio",
-          "Renaming clips",
-        ],
-        answer: 0,
-      },
-      {
-        question: "What is a keyframe commonly used for?",
-        options: [
-          "Changing a file name",
-          "Defining a value at a point in time",
-          "Deleting a timeline",
-          "Compressing audio",
-        ],
-        answer: 1,
-      },
-    ];
-  }
-
-  return [
-    {
-      question: `Which is an important basic concept when learning ${skillName}?`,
-      options: [
-        "Understanding the fundamentals",
-        "Skipping all practice",
-        "Avoiding feedback",
-        "Memorizing everything without understanding",
-      ],
-      answer: 0,
-    },
-    {
-      question: "What is usually the best way to improve a practical skill?",
-      options: [
-        "Only watching tutorials",
-        "Regular practice and feedback",
-        "Never trying difficult tasks",
-        "Avoiding mistakes completely",
-      ],
-      answer: 1,
-    },
-    {
-      question: "Why are fundamentals important?",
-      options: [
-        "They provide a foundation for advanced work",
-        "They make practice unnecessary",
-        "They replace experience",
-        "They only matter for exams",
-      ],
-      answer: 0,
-    },
-    {
-      question: "What is a useful way to check your progress?",
-      options: [
-        "Never testing yourself",
-        "Comparing only with professionals",
-        "Building projects or solving problems",
-        "Avoiding feedback",
-      ],
-      answer: 2,
-    },
-    {
-      question: "What usually helps someone become better at a skill?",
-      options: [
-        "Consistent practice",
-        "Doing it once",
-        "Avoiding challenges",
-        "Ignoring mistakes",
-      ],
-      answer: 0,
-    },
-  ];
 }

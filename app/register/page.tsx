@@ -47,9 +47,9 @@ export default function RegisterPage() {
         return;
       }
 
-      alert("Account created successfully!");
-
-      window.location.href = "/login";
+      // Registration successful
+      // No success popup. Go directly to home.
+      window.location.href = "/";
     } catch {
       alert("Unable to connect to the server.");
     } finally {
