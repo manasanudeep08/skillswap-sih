@@ -695,10 +695,6 @@ function SkillVerificationCard({
    QUIZ
    ========================================================= */
 
-/* =========================================================
-   QUIZ
-   ========================================================= */
-
 type QuizQuestion = {
   question: string;
   options: string[];
@@ -721,6 +717,7 @@ function Quiz({
   const [answers, setAnswers] = useState<number[]>([]);
   const [loadingQuiz, setLoadingQuiz] = useState(true);
   const [quizError, setQuizError] = useState("");
+  const [answerError, setAnswerError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -730,6 +727,7 @@ function Quiz({
   async function generateQuiz() {
     setLoadingQuiz(true);
     setQuizError("");
+    setAnswerError("");
 
     try {
       const response = await fetch("/api/quiz/generate", {
@@ -755,17 +753,24 @@ function Quiz({
         !Array.isArray(data.questions) ||
         data.questions.length !== 5
       ) {
-        throw new Error("AI returned an invalid quiz.");
+        throw new Error(
+          "AI returned an invalid quiz."
+        );
       }
 
       setQuestions(data.questions);
       setAnswers([]);
       setCurrentQuestion(0);
     } catch (error) {
-      console.error("Quiz generation error:", error);
+      console.error(
+        "Quiz generation error:",
+        error
+      );
 
       setQuizError(
-        "We couldn't generate your quiz right now. Please try again."
+        error instanceof Error
+          ? error.message
+          : "We couldn't generate your quiz right now."
       );
     } finally {
       setLoadingQuiz(false);
@@ -773,6 +778,8 @@ function Quiz({
   }
 
   function selectAnswer(answer: number) {
+    setAnswerError("");
+
     setAnswers((current) => {
       const updated = [...current];
       updated[currentQuestion] = answer;
@@ -780,29 +787,41 @@ function Quiz({
     });
   }
 
-  async function nextQuestion() {
+  function nextQuestion() {
     if (answers[currentQuestion] === undefined) {
-      alert("Choose an answer first.");
+      setAnswerError(
+        "Please choose an answer before continuing."
+      );
       return;
     }
+
+    setAnswerError("");
 
     if (currentQuestion < questions.length - 1) {
-      setCurrentQuestion((current) => current + 1);
+      setCurrentQuestion(
+        (current) => current + 1
+      );
       return;
     }
 
-    await finishQuiz();
+    finishQuiz();
   }
 
   async function finishQuiz() {
-    if (!user || questions.length === 0) return;
+    if (!user || questions.length !== 5) {
+      return;
+    }
 
     setSubmitting(true);
+    setAnswerError("");
 
     const correctAnswers = questions.reduce(
       (score, question, index) => {
-        return score + (
-          answers[index] === question.answer ? 1 : 0
+        return (
+          score +
+          (answers[index] === question.answer
+            ? 1
+            : 0)
         );
       },
       0
@@ -812,7 +831,28 @@ function Quiz({
       (correctAnswers / questions.length) * 100
     );
 
-    const passed = score >= 70;
+    /*
+     * 5 questions means:
+     *
+     * 0-1 correct = Beginner
+     * 2-3 correct = Intermediate
+     * 4 correct   = Advanced
+     * 5 correct   = Professional
+     *
+     * 80%+ is required for verification.
+     */
+
+    let level = "Beginner";
+
+    if (correctAnswers >= 5) {
+      level = "Professional";
+    } else if (correctAnswers >= 4) {
+      level = "Advanced";
+    } else if (correctAnswers >= 2) {
+      level = "Intermediate";
+    }
+
+    const verified = score >= 80;
 
     try {
       const response = await fetch("/api/skills", {
@@ -823,7 +863,7 @@ function Quiz({
         body: JSON.stringify({
           skillId: skill.id,
           userId: user.id,
-          verified: passed,
+          verified,
           verificationMethod: "quiz",
           quizScore: score,
         }),
@@ -832,33 +872,54 @@ function Quiz({
       const data = await response.json();
 
       if (!response.ok) {
-        alert(
-          data.error || "Unable to save quiz result."
-        );
-        return;
-      }
-
-      if (passed) {
-        alert(`Quiz passed! You scored ${score}%.`);
-      } else {
-        alert(
-          `You scored ${score}%. You need 70% to verify this skill.`
+        throw new Error(
+          data.error ||
+            "Unable to save quiz result."
         );
       }
 
-      onComplete(data.skill);
+      /*
+       * Send the user to the dedicated result page.
+       * No alert/dialogue box.
+       */
+
+      const params = new URLSearchParams({
+        skill: skill.name,
+        score: String(score),
+        correct: String(correctAnswers),
+        total: String(questions.length),
+        level,
+        verified: String(verified),
+      });
+
+      window.location.href =
+        `/skills/verify/result?${params.toString()}`;
+
     } catch (error) {
-      console.error("Quiz result error:", error);
-      alert("Something went wrong while saving your result.");
+      console.error(
+        "Quiz result error:",
+        error
+      );
+
+      setAnswerError(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while saving your result."
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
+  /* =====================================================
+     AI QUIZ LOADING
+     ===================================================== */
+
   if (loadingQuiz) {
     return (
       <div className="mt-7 rounded-2xl border border-white bg-white/70 p-8 shadow-sm backdrop-blur-xl">
         <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+
           <div className="grid h-16 w-16 place-items-center rounded-2xl bg-violet-100 text-violet-600">
             <Sparkles
               size={28}
@@ -872,21 +933,31 @@ function Quiz({
 
           <p className="mt-2 max-w-md text-sm leading-6 text-zinc-500">
             Our AI is creating questions specifically
-            for <span className="font-bold">{skill.name}</span>.
+            for{" "}
+            <span className="font-bold text-zinc-700">
+              {skill.name}
+            </span>
+            .
           </p>
 
           <div className="mt-5 h-2 w-48 overflow-hidden rounded-full bg-zinc-100">
             <div className="h-full w-1/2 animate-pulse rounded-full bg-violet-600" />
           </div>
+
         </div>
       </div>
     );
   }
 
+  /* =====================================================
+     AI QUIZ ERROR
+     ===================================================== */
+
   if (quizError) {
     return (
       <div className="mt-7 rounded-2xl border border-white bg-white/70 p-8 shadow-sm backdrop-blur-xl">
         <div className="flex min-h-[260px] flex-col items-center justify-center text-center">
+
           <div className="grid h-16 w-16 place-items-center rounded-2xl bg-red-100 text-red-600">
             <Sparkles size={28} />
           </div>
@@ -900,6 +971,7 @@ function Quiz({
           </p>
 
           <div className="mt-6 flex gap-3">
+
             <button
               onClick={onBack}
               className="rounded-xl border border-white bg-white px-5 py-3 text-sm font-bold text-zinc-600 transition hover:bg-zinc-50"
@@ -913,13 +985,16 @@ function Quiz({
             >
               Try Again
             </button>
+
           </div>
+
         </div>
       </div>
     );
   }
 
-  const question = questions[currentQuestion];
+  const question =
+    questions[currentQuestion];
 
   if (!question) {
     return null;
@@ -927,7 +1002,11 @@ function Quiz({
 
   return (
     <div className="mt-7 rounded-2xl border border-white bg-white/70 p-6 shadow-sm backdrop-blur-xl">
+
+      {/* HEADER */}
+
       <div className="flex items-center justify-between">
+
         <div>
           <p className="flex items-center gap-2 text-xs font-black tracking-widest text-indigo-600">
             <Sparkles size={14} />
@@ -946,58 +1025,87 @@ function Quiz({
         <span className="text-sm font-bold text-zinc-400">
           {currentQuestion + 1}/{questions.length}
         </span>
+
       </div>
+
+      {/* PROGRESS */}
 
       <div className="mt-5 h-2 overflow-hidden rounded-full bg-zinc-100">
         <div
           className="h-full rounded-full bg-violet-600 transition-all duration-300"
           style={{
             width: `${
-              ((currentQuestion + 1) / questions.length) * 100
+              ((currentQuestion + 1) /
+                questions.length) *
+              100
             }%`,
           }}
         />
       </div>
 
+      {/* QUESTION */}
+
       <div className="mt-7">
+
         <p className="text-lg font-black leading-7">
           {question.question}
         </p>
 
         <div className="mt-5 space-y-3">
-          {question.options.map((option, index) => {
-            const selected =
-              answers[currentQuestion] === index;
 
-            return (
-              <button
-                key={`${option}-${index}`}
-                onClick={() => selectAnswer(index)}
-                disabled={submitting}
-                className={`w-full rounded-xl border p-4 text-left text-sm font-semibold transition ${
-                  selected
-                    ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
-                    : "border-white bg-zinc-50/70 text-zinc-600 hover:bg-white hover:shadow-sm"
-                }`}
-              >
-                <span
-                  className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black shadow-sm ${
+          {question.options.map(
+            (option, index) => {
+              const selected =
+                answers[currentQuestion] ===
+                index;
+
+              return (
+                <button
+                  key={`${option}-${index}`}
+                  onClick={() =>
+                    selectAnswer(index)
+                  }
+                  disabled={submitting}
+                  className={`w-full rounded-xl border p-4 text-left text-sm font-semibold transition ${
                     selected
-                      ? "bg-violet-600 text-white"
-                      : "bg-white text-zinc-600"
+                      ? "border-violet-500 bg-violet-50 text-violet-700 shadow-sm"
+                      : "border-white bg-zinc-50/70 text-zinc-600 hover:bg-white hover:shadow-sm"
                   }`}
                 >
-                  {String.fromCharCode(65 + index)}
-                </span>
+                  <span
+                    className={`mr-3 inline-flex h-7 w-7 items-center justify-center rounded-lg text-xs font-black shadow-sm ${
+                      selected
+                        ? "bg-violet-600 text-white"
+                        : "bg-white text-zinc-600"
+                    }`}
+                  >
+                    {String.fromCharCode(
+                      65 + index
+                    )}
+                  </span>
 
-                {option}
-              </button>
-            );
-          })}
+                  {option}
+                </button>
+              );
+            }
+          )}
+
         </div>
+
+        {/* INLINE ERROR */}
+
+        {answerError && (
+          <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-600">
+            {answerError}
+          </div>
+        )}
+
       </div>
 
+      {/* BUTTONS */}
+
       <div className="mt-7 flex justify-between gap-3">
+
         <button
           onClick={onBack}
           disabled={submitting}
@@ -1013,13 +1121,18 @@ function Quiz({
         >
           {submitting
             ? "Saving..."
-            : currentQuestion === questions.length - 1
+            : currentQuestion ===
+                questions.length - 1
               ? "Finish Quiz"
               : "Next"}
 
-          {!submitting && <ArrowRight size={16} />}
+          {!submitting && (
+            <ArrowRight size={16} />
+          )}
         </button>
+
       </div>
+
     </div>
   );
 }
