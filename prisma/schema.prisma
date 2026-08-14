@@ -20,8 +20,8 @@ model User {
   skills    Skill[]
   sessions  Session[]
 
-sentRequests     ExchangeRequest[] @relation("SentRequests")
-receivedRequests ExchangeRequest[] @relation("ReceivedRequests")
+  sentRequests     ExchangeRequest[] @relation("SentRequests")
+  receivedRequests ExchangeRequest[] @relation("ReceivedRequests")
 }
 
 model Skill {
@@ -58,16 +58,4 @@ model ExchangeRequest {
 
   sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
-}
-
-  receiver User @relation(
-    "ReceivedRequests",
-    fields: [receiverId],
-    references: [id],
-    onDelete: Cascade
-  )
-
-  @@unique([senderId, receiverId])
-  @@index([receiverId, status])
-  @@index([senderId, status])
 }
