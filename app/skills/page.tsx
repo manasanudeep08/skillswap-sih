@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
-  ArrowLeft,
   ArrowRight,
   Award,
   BookOpen,
@@ -81,6 +80,19 @@ export default function SkillsPage() {
       }
     } catch (error) {
       console.error("Skills loading error:", error);
+    }
+  }
+
+  async function logout() {
+    try {
+      await fetch("/api/logout", {
+        method: "POST",
+      });
+
+      setUser(null);
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Logout failed:", error);
     }
   }
 
@@ -201,9 +213,9 @@ export default function SkillsPage() {
 
       {/* Navbar */}
 
-      <nav className="sticky top-0 z-50 border-b border-white/70 bg-white/50 backdrop-blur-2xl">
+      <nav className="sticky top-0 z-50 border-b border-white/70 bg-white/45 backdrop-blur-2xl">
 
-        <div className="mx-auto flex h-20 max-w-6xl items-center justify-between px-6">
+        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
 
           <Link
             href="/"
@@ -212,13 +224,76 @@ export default function SkillsPage() {
             Skill<span className="text-violet-600">Swap</span>
           </Link>
 
-          <Link
-            href="/"
-            className="flex items-center gap-2 rounded-xl border border-white bg-white/60 px-4 py-2 text-sm font-bold text-zinc-600 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/80"
-          >
-            <ArrowLeft size={16} />
-            Home
-          </Link>
+          <div className="hidden items-center gap-2 md:flex">
+
+            <Link
+              href="/"
+              className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950"
+            >
+              Home
+            </Link>
+
+            <Link
+              href="/skills"
+              className="rounded-xl bg-white/70 px-4 py-2 text-sm font-bold text-violet-700 shadow-sm transition hover:bg-white"
+            >
+              My Skills
+            </Link>
+
+            <Link
+              href="/matches"
+              className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950"
+            >
+              Matches
+            </Link>
+
+            <Link
+              href="/requests"
+              className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950"
+            >
+              Requests
+            </Link>
+
+          </div>
+
+          <div className="flex items-center gap-3">
+
+            <Link
+              href="/profile"
+              className="flex items-center gap-3 rounded-2xl border border-white/90 bg-white/55 px-3 py-2 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/80"
+            >
+              <div className="grid h-10 w-10 place-items-center rounded-full border border-white bg-white/70 text-lg shadow-inner">
+                {{
+                  avatar1: "🧑‍💻",
+                  avatar2: "🎨",
+                  avatar3: "🎮",
+                  avatar4: "📚",
+                  avatar5: "🚀",
+                }[user?.avatar || ""] || "🧑‍💻"}
+              </div>
+
+              <div className="hidden text-left sm:block">
+                <p className="text-sm font-black">
+                  {user?.username}
+                </p>
+
+                <p className="text-xs text-zinc-500">
+                  View profile
+                </p>
+              </div>
+            </Link>
+
+            <button
+              onClick={logout}
+              className="grid h-10 w-10 place-items-center rounded-xl border border-white/90 bg-white/55 text-zinc-500 shadow-sm backdrop-blur-xl transition hover:bg-red-50 hover:text-red-500"
+              title="Logout"
+            >
+              <span className="text-sm font-black">
+                ↪
+              </span>
+            </button>
+
+          </div>
 
         </div>
 

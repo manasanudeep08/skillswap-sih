@@ -17,11 +17,33 @@ model User {
   avatar    String   @default("avatar1")
   createdAt DateTime @default(now())
 
-  skills    Skill[]
-  sessions  Session[]
+  // Personal contact information
+  phone String?
+
+  // Social media / external links
+  githubUrl    String?
+  linkedinUrl  String?
+  instagramUrl String?
+  portfolioUrl String?
+  otherUrl     String?
+
+  // Privacy settings
+  // private  = only the profile owner
+  // matches  = people with an exchange relationship
+  // accepted = people whose exchange request was accepted
+  emailVisibility  String @default("accepted")
+  phoneVisibility  String @default("accepted")
+  socialVisibility String @default("matches")
+
+  // Relations
+  skills   Skill[]
+  sessions Session[]
 
   sentRequests     ExchangeRequest[] @relation("SentRequests")
   receivedRequests ExchangeRequest[] @relation("ReceivedRequests")
+
+  ratingsGiven    Rating[] @relation("Rating_reviewerIdToUser")
+  ratingsReceived Rating[] @relation("Rating_revieweeIdToUser")
 }
 
 model Skill {
@@ -58,4 +80,22 @@ model ExchangeRequest {
 
   sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  ratings Rating[]
+}
+
+model Rating {
+  id         Int      @id @default(autoincrement())
+  requestId  Int
+  reviewerId Int
+  revieweeId Int
+  stars      Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  reviewer User            @relation("Rating_reviewerIdToUser", fields: [reviewerId], references: [id], onDelete: Cascade)
+  reviewee User            @relation("Rating_revieweeIdToUser", fields: [revieweeId], references: [id], onDelete: Cascade)
+  request  ExchangeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, reviewerId])
 }

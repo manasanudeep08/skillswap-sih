@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "../../../lib/prisma";
 
 type SkillData = {
   id: number;
@@ -79,7 +79,10 @@ function findMatches(
     verified: boolean;
   }[];
 
-  if (learnFromThem.length === 0 && learnFromMe.length === 0) {
+  if (
+    learnFromThem.length === 0 &&
+    learnFromMe.length === 0
+  ) {
     return null;
   }
 
@@ -121,7 +124,9 @@ function findMatches(
 
   const score = Math.min(
     100,
-    Math.round(compatibility + verificationBonus)
+    Math.round(
+      compatibility + verificationBonus
+    )
   );
 
   return {
@@ -129,7 +134,8 @@ function findMatches(
     learnFromThem,
     learnFromMe,
     totalMatches:
-      learnFromThem.length + learnFromMe.length,
+      learnFromThem.length +
+      learnFromMe.length,
   };
 }
 
@@ -138,7 +144,9 @@ function findMatches(
    GET /api/matches?userId=1
    ========================================================= */
 
-export async function GET(request: NextRequest) {
+export async function GET(
+  request: NextRequest
+) {
   try {
     const userIdParam =
       request.nextUrl.searchParams.get("userId");
@@ -159,14 +167,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const currentUser = await prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-      include: {
-        skills: true,
-      },
-    });
+    const currentUser =
+      await prisma.user.findUnique({
+        where: {
+          id: userId,
+        },
+        include: {
+          skills: true,
+        },
+      });
 
     if (!currentUser) {
       return NextResponse.json(
@@ -176,18 +185,25 @@ export async function GET(request: NextRequest) {
     }
 
     const myTeach = currentUser.skills.filter(
-      (skill) => skill.type.toLowerCase() === "teach"
+      (skill) =>
+        skill.type.toLowerCase() ===
+        "teach"
     );
 
     const myLearn = currentUser.skills.filter(
-      (skill) => skill.type.toLowerCase() === "learn"
+      (skill) =>
+        skill.type.toLowerCase() ===
+        "learn"
     );
 
     /*
      * If the user hasn't added any skills yet,
      * there is nothing to match.
      */
-    if (myTeach.length === 0 && myLearn.length === 0) {
+    if (
+      myTeach.length === 0 &&
+      myLearn.length === 0
+    ) {
       return NextResponse.json({
         matches: [],
         message:
@@ -198,19 +214,20 @@ export async function GET(request: NextRequest) {
     /*
      * Load all other users and their skills.
      */
-    const otherUsers = await prisma.user.findMany({
-      where: {
-        id: {
-          not: userId,
+    const otherUsers =
+      await prisma.user.findMany({
+        where: {
+          id: {
+            not: userId,
+          },
         },
-      },
-      include: {
-        skills: true,
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        include: {
+          skills: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
     const matches = otherUsers
       .map((otherUser) => {
@@ -235,23 +252,32 @@ export async function GET(request: NextRequest) {
 
           score: result.score,
 
-          learnFromThem: result.learnFromThem,
+          learnFromThem:
+            result.learnFromThem,
 
-          learnFromMe: result.learnFromMe,
+          learnFromMe:
+            result.learnFromMe,
 
-          totalMatches: result.totalMatches,
+          totalMatches:
+            result.totalMatches,
         };
       })
       .filter(Boolean)
       .sort((a, b) => {
-        return (b?.score ?? 0) - (a?.score ?? 0);
+        return (
+          (b?.score ?? 0) -
+          (a?.score ?? 0)
+        );
       });
 
     return NextResponse.json({
       matches,
     });
   } catch (error) {
-    console.error("GET /api/matches error:", error);
+    console.error(
+      "GET /api/matches error:",
+      error
+    );
 
     return NextResponse.json(
       {

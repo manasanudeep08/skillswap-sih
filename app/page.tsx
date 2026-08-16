@@ -5,22 +5,16 @@ import { useEffect, useState } from "react";
 import {
   ArrowRight,
   Brain,
-  CheckCircle2,
-  LogOut,
   MessageCircle,
-  Sparkles,
   Star,
   User,
+  LogOut,
+  Sparkles,
   Users,
+  BookOpen,
+  Activity,
+  Send,
 } from "lucide-react";
-
-const avatars: Record<string, string> = {
-  avatar1: "🧑‍💻",
-  avatar2: "🎨",
-  avatar3: "🎮",
-  avatar4: "📚",
-  avatar5: "🚀",
-};
 
 type UserData = {
   id: number;
@@ -30,10 +24,6 @@ type UserData = {
   bio: string | null;
   avatar: string;
 };
-
-/* =========================================================
-   MAIN PAGE
-   ========================================================= */
 
 export default function Home() {
   const [user, setUser] = useState<UserData | null>(null);
@@ -77,7 +67,7 @@ export default function Home() {
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#f4f3fb]">
-        <div className="h-9 w-9 animate-spin rounded-full border-4 border-violet-200 border-t-violet-600" />
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-violet-200 border-t-violet-600" />
       </main>
     );
   }
@@ -98,9 +88,7 @@ function LoggedOutHome() {
     <main className="relative min-h-screen overflow-hidden bg-[#f1f0f8] text-zinc-950">
 
       {/* BACKGROUND */}
-
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-
         <div className="absolute -left-48 -top-48 h-[650px] w-[650px] rounded-full bg-violet-500/35 blur-[120px]" />
 
         <div className="absolute -right-48 -top-20 h-[620px] w-[620px] rounded-full bg-blue-500/30 blur-[120px]" />
@@ -119,11 +107,9 @@ function LoggedOutHome() {
         />
 
         <div className="absolute left-1/2 top-[32%] h-[550px] w-[550px] -translate-x-1/2 rounded-full bg-white/50 blur-[140px]" />
-
       </div>
 
       {/* NAVBAR */}
-
       <nav className="relative z-20 flex h-20 items-center justify-between border-b border-white/70 bg-white/45 px-6 backdrop-blur-2xl md:px-12">
 
         <Link
@@ -150,11 +136,9 @@ function LoggedOutHome() {
           </Link>
 
         </div>
-
       </nav>
 
       {/* HERO */}
-
       <section className="relative z-10 mx-auto grid max-w-7xl gap-12 px-6 pb-16 pt-12 md:grid-cols-2 md:px-12 md:pb-20 md:pt-16">
 
         <div className="flex flex-col justify-center">
@@ -164,19 +148,15 @@ function LoggedOutHome() {
           </div>
 
           <h1 className="text-5xl font-black leading-[0.95] tracking-tight md:text-7xl">
-
             You teach what
-
             <span className="block text-violet-600">
               you know.
             </span>
 
             You learn what
-
             <span className="block text-violet-600">
               you don't.
             </span>
-
           </h1>
 
           <p className="mt-7 max-w-xl text-lg leading-8 text-zinc-600">
@@ -186,23 +166,29 @@ function LoggedOutHome() {
             real people.
           </p>
 
+          {/* FIND YOUR MATCH */}
           <div className="mt-8">
 
             <Link
               href="/register"
-              className="group relative inline-flex items-center gap-4 overflow-hidden rounded-[22px] border border-white/80 bg-white/30 px-3 py-3 pr-7 text-zinc-950 shadow-[0_8px_35px_rgba(85,65,170,0.22)] backdrop-blur-[24px] transition-all duration-500 hover:-translate-y-1 hover:bg-white/40"
+              className="group relative inline-flex items-center gap-4 overflow-hidden rounded-[22px] border border-white/80 bg-white/30 px-3 py-3 pr-7 text-zinc-950 shadow-[0_8px_35px_rgba(85,65,170,0.22),inset_0_1px_1px_rgba(255,255,255,0.9)] backdrop-blur-[24px] transition-all duration-500 hover:-translate-y-1 hover:bg-white/40 hover:shadow-[0_18px_55px_rgba(85,65,170,0.32),inset_0_1px_2px_rgba(255,255,255,1)]"
             >
 
               <span className="pointer-events-none absolute inset-0 rounded-[22px] bg-gradient-to-br from-white/70 via-white/10 to-transparent opacity-70" />
 
-              <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-[16px] bg-gradient-to-br from-violet-500 via-violet-600 to-indigo-700 text-white shadow-[0_8px_25px_rgba(109,72,220,0.38)] transition-all group-hover:scale-105">
+              <span className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-violet-400/30 blur-2xl transition-all duration-500 group-hover:bg-violet-400/45" />
 
+              <span className="pointer-events-none absolute -bottom-10 left-20 h-24 w-32 rounded-full bg-blue-400/20 blur-2xl transition-all duration-500 group-hover:bg-blue-400/35" />
+
+              <span className="pointer-events-none absolute inset-0 rounded-[22px] ring-1 ring-inset ring-violet-300/30" />
+
+              <span className="pointer-events-none absolute left-[12%] right-[12%] top-0 h-px bg-white/90 blur-[1px]" />
+
+              <span className="relative grid h-12 w-12 shrink-0 place-items-center rounded-[16px] border border-white/30 bg-gradient-to-br from-violet-500 via-violet-600 to-indigo-700 text-white shadow-[0_8px_25px_rgba(109,72,220,0.38)] transition-all duration-500 group-hover:scale-105 group-hover:shadow-[0_10px_30px_rgba(109,72,220,0.50)]">
                 <Users size={20} />
-
               </span>
 
               <span className="relative">
-
                 <span className="block text-sm font-black">
                   Find your match
                 </span>
@@ -210,12 +196,11 @@ function LoggedOutHome() {
                 <span className="mt-0.5 block text-xs font-medium text-zinc-500">
                   Discover your perfect skill exchange
                 </span>
-
               </span>
 
               <ArrowRight
                 size={18}
-                className="relative ml-1 text-violet-600 transition-all group-hover:translate-x-1"
+                className="relative ml-1 text-violet-600 transition-all duration-500 group-hover:translate-x-1 group-hover:text-violet-700"
               />
 
             </Link>
@@ -225,7 +210,6 @@ function LoggedOutHome() {
         </div>
 
         {/* MATCH PREVIEW */}
-
         <div className="flex items-center justify-center">
 
           <div className="w-full max-w-md rounded-[30px] border border-white/90 bg-white/45 p-6 shadow-[0_25px_80px_rgba(80,60,150,0.20)] backdrop-blur-2xl">
@@ -233,7 +217,6 @@ function LoggedOutHome() {
             <div className="mb-5 flex items-center justify-between">
 
               <div>
-
                 <p className="text-xs font-bold tracking-[0.18em] text-zinc-400">
                   SMART MATCH
                 </p>
@@ -241,7 +224,6 @@ function LoggedOutHome() {
                 <h2 className="mt-1 text-xl font-black">
                   Perfect exchange
                 </h2>
-
               </div>
 
               <div className="rounded-full border border-green-200 bg-green-100/80 px-3 py-1 text-sm font-black text-green-700">
@@ -296,7 +278,6 @@ function LoggedOutHome() {
       </section>
 
       {/* HOW IT WORKS */}
-
       <section
         id="how-it-works"
         className="relative z-10 border-y border-white/70 bg-white/55 px-6 py-20 backdrop-blur-xl"
@@ -328,7 +309,7 @@ function LoggedOutHome() {
 
             <Feature
               icon={<Star />}
-              title="Exchange & grow"
+              title="Exchange & rate"
               text="Connect, learn together and build your reputation."
             />
 
@@ -358,71 +339,84 @@ function LoggedInHome({
   logout: () => void;
 }) {
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#f5f4fa] text-zinc-950">
+    <main className="relative min-h-screen overflow-hidden bg-[#eef0f8] text-zinc-950">
 
       {/* BACKGROUND */}
+      <div className="pointer-events-none fixed inset-0 -z-10">
 
-      <div className="pointer-events-none fixed inset-0 -z-10 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_10%,rgba(139,92,246,0.30),transparent_30%),radial-gradient(circle_at_90%_20%,rgba(59,130,246,0.22),transparent_30%),radial-gradient(circle_at_50%_100%,rgba(217,70,239,0.18),transparent_35%)]" />
 
-        <div className="absolute -left-48 top-[-150px] h-[500px] w-[500px] rounded-full bg-violet-300/25 blur-[130px]" />
+        <div className="absolute left-[-150px] top-[100px] h-[500px] w-[500px] rounded-full bg-violet-400/20 blur-[130px]" />
 
-        <div className="absolute right-[-180px] top-[180px] h-[500px] w-[500px] rounded-full bg-blue-300/20 blur-[130px]" />
+        <div className="absolute right-[-180px] top-[200px] h-[500px] w-[500px] rounded-full bg-blue-400/20 blur-[130px]" />
 
-        <div className="absolute bottom-[-250px] left-[35%] h-[500px] w-[500px] rounded-full bg-fuchsia-300/15 blur-[140px]" />
+        <div
+          className="absolute inset-0 opacity-[0.06]"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(80,70,120,0.7) 1px, transparent 1px), linear-gradient(90deg, rgba(80,70,120,0.7) 1px, transparent 1px)",
+            backgroundSize: "50px 50px",
+          }}
+        />
 
       </div>
 
       {/* NAVBAR */}
+      <nav className="sticky top-0 z-50 border-b border-white/70 bg-white/45 backdrop-blur-2xl">
 
-      <nav className="sticky top-0 z-50 border-b border-zinc-200/70 bg-[#f5f4fa]/80 backdrop-blur-2xl">
-
-        <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
-
-          {/* LOGO */}
+        <div className="mx-auto flex min-h-20 max-w-7xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
 
           <Link
             href="/"
-            className="text-2xl font-black tracking-tight"
+            className="shrink-0 text-2xl font-black"
           >
             Skill<span className="text-violet-600">
               Swap
             </span>
           </Link>
 
-          {/* NAV LINKS */}
-
-          <div className="hidden items-center gap-1 md:flex">
+          {/* MAIN NAVIGATION
+              Changed from hidden md:flex to flex.
+              Requests is now visible on Home too.
+          */}
+          <div className="flex items-center gap-1 sm:gap-2">
 
             <Link
               href="/"
-              className="rounded-xl bg-white px-4 py-2 text-sm font-bold text-zinc-950 shadow-sm"
+              className="rounded-xl bg-white/70 px-2.5 py-2 text-xs font-bold text-violet-700 shadow-sm transition hover:bg-white sm:px-4 sm:text-sm"
             >
               Home
             </Link>
 
             <Link
               href="/skills"
-              className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-500 transition hover:bg-white hover:text-zinc-950"
+              className="rounded-xl px-2.5 py-2 text-xs font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950 sm:px-4 sm:text-sm"
             >
               My Skills
             </Link>
 
             <Link
               href="/matches"
-              className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-500 transition hover:bg-white hover:text-zinc-950"
+              className="rounded-xl px-2.5 py-2 text-xs font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950 sm:px-4 sm:text-sm"
             >
               Matches
             </Link>
 
+            <Link
+              href="/requests"
+              className="rounded-xl px-2.5 py-2 text-xs font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950 sm:px-4 sm:text-sm"
+            >
+              Requests
+            </Link>
+
           </div>
 
-          {/* PROFILE */}
-
-          <div className="flex items-center gap-2">
+          {/* ACCOUNT */}
+          <div className="flex shrink-0 items-center gap-2 sm:gap-3">
 
             <Link
               href="/profile"
-              className="flex items-center gap-3 rounded-xl border border-zinc-200/80 bg-white/80 px-3 py-2 shadow-sm transition hover:bg-white"
+              className="flex items-center gap-2 rounded-2xl border border-white/90 bg-white/55 px-2 py-2 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/80 sm:gap-3 sm:px-3"
             >
 
               <Avatar avatar={user.avatar} />
@@ -433,7 +427,7 @@ function LoggedInHome({
                   {user.username}
                 </p>
 
-                <p className="text-[11px] text-zinc-400">
+                <p className="text-xs text-zinc-500">
                   View profile
                 </p>
 
@@ -443,8 +437,8 @@ function LoggedInHome({
 
             <button
               onClick={logout}
+              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-white/90 bg-white/55 text-zinc-500 shadow-sm backdrop-blur-xl transition hover:bg-red-50 hover:text-red-500"
               title="Logout"
-              className="grid h-10 w-10 place-items-center rounded-xl border border-zinc-200/80 bg-white/80 text-zinc-500 shadow-sm transition hover:bg-red-50 hover:text-red-500"
             >
               <LogOut size={17} />
             </button>
@@ -455,400 +449,137 @@ function LoggedInHome({
 
       </nav>
 
-      {/* MAIN */}
+      {/* MAIN HERO */}
+      <section className="mx-auto max-w-7xl px-6 py-14 md:py-20">
 
-      <section className="mx-auto max-w-7xl px-6 py-10 md:py-14">
+        <div className="grid items-center gap-12 lg:grid-cols-[1.1fr_0.9fr]">
 
-        {/* GREETING */}
+          {/* LEFT */}
+          <div>
 
-        <div className="mb-10">
+            <div className="mb-5 flex w-fit items-center gap-2 rounded-full border border-white/90 bg-white/50 px-4 py-2 text-sm font-bold text-violet-700 shadow-sm backdrop-blur-xl">
 
-          <p className="text-sm font-bold text-violet-600">
-            GOOD TO SEE YOU, {user.username}
-          </p>
+              <Sparkles size={15} />
 
-          <h1 className="mt-2 text-4xl font-black tracking-tight md:text-5xl">
-            What can you teach?
-          </h1>
+              Welcome back, {user.username}
 
-          <p className="mt-3 max-w-2xl text-zinc-500">
-            Add your skills, discover people with
-            complementary skills, and start your next
-            exchange.
-          </p>
+            </div>
 
-        </div>
+            <h1 className="max-w-3xl text-5xl font-black leading-[0.95] tracking-tight md:text-7xl">
 
-        {/* MAIN DASHBOARD AREA */}
+              Ready to find
 
-        <div className="grid gap-6 lg:grid-cols-[1.35fr_0.65fr]">
+              <span className="block text-violet-600">
+                your exchange?
+              </span>
 
-          {/* EXCHANGE PANEL */}
+            </h1>
 
-          <div className="rounded-[30px] border border-white bg-white/65 p-7 shadow-[0_20px_70px_rgba(80,70,150,0.10)] backdrop-blur-xl">
+            <p className="mt-7 max-w-2xl text-lg leading-8 text-zinc-600">
+              Tell us what you can teach and what you
+              want to learn. SkillSwap will find people
+              whose skills complement yours.
+            </p>
 
-            <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
-
-              <div>
-
-                <div className="flex items-center gap-2">
-
-                  <div className="grid h-9 w-9 place-items-center rounded-xl bg-violet-100 text-violet-600">
-                    <Sparkles size={17} />
-                  </div>
-
-                  <p className="text-xs font-black tracking-[0.16em] text-violet-600">
-                    YOUR SKILL EXCHANGE
-                  </p>
-
-                </div>
-
-                <h2 className="mt-3 text-2xl font-black">
-                  Build your exchange
-                </h2>
-
-                <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
-                  Tell SkillSwap what you offer and
-                  what you're looking for.
-                </p>
-
-              </div>
+            {/* MAIN CTA */}
+            <div className="mt-8">
 
               <Link
-                href="/skills"
-                className="flex w-fit items-center gap-2 rounded-xl bg-zinc-950 px-5 py-3 text-sm font-bold text-white transition hover:-translate-y-0.5 hover:bg-violet-700"
+                href="/matches"
+                className="group relative inline-flex items-center gap-4 overflow-hidden rounded-[22px] border border-white/80 bg-white/35 px-3 py-3 pr-7 font-black shadow-[0_10px_40px_rgba(100,70,200,0.22)] backdrop-blur-2xl transition duration-500 hover:-translate-y-1 hover:bg-white/55 hover:shadow-[0_18px_55px_rgba(100,70,200,0.32)]"
               >
-                Manage Skills
-                <ArrowRight size={16} />
+
+                <span className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/60 via-transparent to-violet-400/10" />
+
+                <span className="pointer-events-none absolute -right-8 -top-8 h-24 w-24 rounded-full bg-violet-400/25 blur-2xl transition group-hover:bg-violet-400/40" />
+
+                <span className="relative grid h-12 w-12 place-items-center rounded-[16px] bg-gradient-to-br from-violet-500 via-violet-600 to-indigo-700 text-white shadow-lg shadow-violet-500/30 transition group-hover:scale-105">
+                  <Users size={20} />
+                </span>
+
+                <span className="relative">
+
+                  <span className="block text-sm font-black">
+                    Find My Match
+                  </span>
+
+                  <span className="mt-0.5 block text-xs font-medium text-zinc-500">
+                    See people who complement your skills
+                  </span>
+
+                </span>
+
+                <ArrowRight
+                  size={18}
+                  className="relative text-violet-600 transition group-hover:translate-x-1"
+                />
+
               </Link>
 
             </div>
 
-            {/* EXCHANGE */}
-
-            <div className="mt-8 grid gap-4 md:grid-cols-[1fr_auto_1fr] md:items-center">
-
-              {/* TEACH */}
-
-              <div className="rounded-2xl border border-violet-100 bg-violet-50/70 p-6">
-
-                <div className="flex items-center justify-between">
-
-                  <div>
-
-                    <p className="text-xs font-black tracking-widest text-violet-500">
-                      I CAN TEACH
-                    </p>
-
-                    <h3 className="mt-2 text-xl font-black">
-                      Your skills
-                    </h3>
-
-                  </div>
-
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-xl shadow-sm">
-                    🎓
-                  </div>
-
-                </div>
-
-                <div className="mt-5 space-y-2">
-
-                  <SkillPill
-                    text="Python"
-                    verified
-                  />
-
-                  <SkillPill text="Video Editing" />
-
-                  <SkillPill
-                    text="Add another skill"
-                    add
-                  />
-
-                </div>
-
-              </div>
-
-              {/* EXCHANGE ICON */}
-
-              <div className="mx-auto grid h-12 w-12 place-items-center rounded-full border border-white bg-white text-violet-600 shadow-md">
-
-                <ArrowRight
-                  size={20}
-                  className="hidden md:block"
-                />
-
-                <ArrowRight
-                  size={20}
-                  className="rotate-90 md:hidden"
-                />
-
-              </div>
-
-              {/* LEARN */}
-
-              <div className="rounded-2xl border border-blue-100 bg-blue-50/70 p-6">
-
-                <div className="flex items-center justify-between">
-
-                  <div>
-
-                    <p className="text-xs font-black tracking-widest text-blue-500">
-                      I WANT TO LEARN
-                    </p>
-
-                    <h3 className="mt-2 text-xl font-black">
-                      Your goals
-                    </h3>
-
-                  </div>
-
-                  <div className="grid h-11 w-11 place-items-center rounded-xl bg-white text-xl shadow-sm">
-                    🎯
-                  </div>
-
-                </div>
-
-                <div className="mt-5 space-y-2">
-
-                  <SkillPill text="UI/UX Design" />
-
-                  <SkillPill text="Python" />
-
-                  <SkillPill
-                    text="Add a learning goal"
-                    add
-                  />
-
-                </div>
-
-              </div>
-
-            </div>
-
           </div>
 
-          {/* MATCH CARD */}
-
-          <div className="flex flex-col rounded-[30px] bg-zinc-950 p-7 text-white shadow-[0_25px_70px_rgba(30,25,50,0.20)]">
-
-            <div className="flex items-start justify-between">
-
-              <div>
-
-                <p className="text-xs font-black tracking-[0.18em] text-violet-400">
-                  MATCHES
-                </p>
-
-                <h2 className="mt-2 text-2xl font-black">
-                  Find your next match.
-                </h2>
-
-              </div>
-
-              <div className="grid h-11 w-11 place-items-center rounded-xl bg-white/10">
-                <Users size={19} />
-              </div>
-
-            </div>
-
-            <p className="mt-4 text-sm leading-6 text-zinc-400">
-              Discover people whose skills line up
-              with what you want to learn.
-            </p>
-
-            {/* MATCH PREVIEW */}
-
-            <div className="mt-7 flex-1 rounded-2xl border border-white/10 bg-white/5 p-5">
-
-              <div className="flex items-center gap-4">
-
-                <div className="grid h-12 w-12 place-items-center rounded-full bg-violet-600 font-black">
-                  R
-                </div>
-
-                <div>
-
-                  <p className="font-black">
-                    Rahul
-                  </p>
-
-                  <p className="text-xs text-zinc-500">
-                    Video Editing → Python
-                  </p>
-
-                </div>
-
-              </div>
-
-              <div className="my-5 flex items-center gap-3">
-
-                <div className="h-px flex-1 bg-white/10" />
-
-                <span className="text-xs font-black text-violet-400">
-                  96%
-                </span>
-
-                <div className="h-px flex-1 bg-white/10" />
-
-              </div>
-
-              <div className="flex items-center gap-4">
-
-                <div className="grid h-12 w-12 place-items-center rounded-full bg-white font-black text-zinc-950">
-                  M
-                </div>
-
-                <div>
-
-                  <p className="font-black">
-                    You
-                  </p>
-
-                  <p className="text-xs text-zinc-500">
-                    Python → Video Editing
-                  </p>
-
-                </div>
-
-              </div>
-
-            </div>
-
-            <Link
-              href="/matches"
-              className="mt-5 flex items-center justify-center gap-2 rounded-xl bg-white py-3.5 text-sm font-black text-zinc-950 transition hover:bg-violet-500 hover:text-white"
-            >
-              View Matches
-              <ArrowRight size={16} />
-            </Link>
-
-          </div>
-
-        </div>
-
-        {/* LOWER SECTION */}
-
-        <div className="mt-8 grid gap-6 lg:grid-cols-3">
-
-          {/* QUICK ACTIONS */}
-
-          <div className="rounded-[28px] border border-white bg-white/60 p-6 shadow-sm backdrop-blur-xl">
-
-            <p className="text-xs font-black tracking-[0.16em] text-zinc-400">
-              QUICK ACTIONS
-            </p>
-
-            <div className="mt-5 space-y-3">
-
-              <QuickAction
-                href="/skills"
-                icon={<Sparkles size={18} />}
-                title="Manage your skills"
-                text="Add or update what you know."
-              />
-
-              <QuickAction
-                href="/matches"
-                icon={<Users size={18} />}
-                title="Browse matches"
-                text="See people you could learn from."
-              />
-
-              <QuickAction
-                href="/profile"
-                icon={<User size={18} />}
-                title="View your profile"
-                text="Update your public information."
-              />
-
-            </div>
-
-          </div>
-
-          {/* VERIFICATION */}
-
-          <div className="rounded-[28px] border border-white bg-white/60 p-6 shadow-sm backdrop-blur-xl">
-
-            <div className="flex items-center gap-3">
-
-              <div className="grid h-10 w-10 place-items-center rounded-xl bg-emerald-100 text-emerald-600">
-                <CheckCircle2 size={19} />
-              </div>
-
-              <div>
-
-                <p className="text-xs font-black tracking-widest text-zinc-400">
-                  TRUST
-                </p>
-
-                <h3 className="font-black">
-                  Verify your skills
-                </h3>
-
-              </div>
-
-            </div>
-
-            <p className="mt-5 text-sm leading-6 text-zinc-500">
-              Show other users that you actually know
-              the skills you're offering.
-            </p>
-
-            <Link
-              href="/skills/verify"
-              className="mt-5 flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 text-sm font-bold transition hover:border-violet-200 hover:text-violet-600"
-            >
-              Take an assessment
-              <ArrowRight size={16} />
-            </Link>
-
-          </div>
-
-          {/* PROFILE SHORTCUT */}
-
-          <div className="rounded-[28px] border border-white bg-white/60 p-6 shadow-sm backdrop-blur-xl">
+          {/* SKILL EXCHANGE CARD */}
+          <div className="rounded-[32px] border border-white/90 bg-white/45 p-7 shadow-[0_25px_80px_rgba(80,70,150,0.16)] backdrop-blur-2xl">
 
             <div className="flex items-center gap-4">
 
-              <Avatar
-                avatar={user.avatar}
-                large
-              />
+              <div className="grid h-14 w-14 place-items-center rounded-2xl bg-violet-100 text-violet-600">
+                <Sparkles size={24} />
+              </div>
 
               <div>
 
                 <p className="text-xs font-black tracking-widest text-violet-600">
-                  YOUR SPACE
+                  SKILLSWAP
                 </p>
 
-                <h3 className="mt-1 text-xl font-black">
-                  {user.name}
-                </h3>
-
-                <p className="text-sm text-zinc-500">
-                  @{user.username}
-                </p>
+                <h2 className="mt-1 text-2xl font-black">
+                  Make your next exchange
+                </h2>
 
               </div>
 
             </div>
 
             <p className="mt-5 text-sm leading-6 text-zinc-500">
-              Keep your profile updated so other users
-              know who they're exchanging skills with.
+              Your skills are the currency here. Add what
+              you know, choose what you want to learn,
+              and we'll handle the matching.
             </p>
+
+            <div className="mt-6 space-y-3">
+
+              <HomeAction
+                icon={<BookOpen size={18} />}
+                title="My Skills"
+                text="Manage what you teach and learn"
+                href="/skills"
+              />
+
+              <HomeAction
+                icon={<Users size={18} />}
+                title="Find Matches"
+                text="Discover people with complementary skills"
+                href="/matches"
+              />
+
+              <HomeAction
+                icon={<Send size={18} />}
+                title="Exchange Requests"
+                text="See requests and manage connections"
+                href="/requests"
+              />
+
+            </div>
 
             <Link
               href="/profile"
-              className="mt-5 flex items-center justify-between rounded-xl bg-white px-4 py-3 text-sm font-bold shadow-sm transition hover:bg-zinc-50"
+              className="mt-5 flex items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white/70 py-3 text-sm font-bold text-zinc-700 transition hover:bg-white hover:text-violet-700"
             >
-
-              View Profile
-
-              <ArrowRight size={16} />
-
+              <User size={17} />
+              View My Profile
             </Link>
 
           </div>
@@ -857,9 +588,124 @@ function LoggedInHome({
 
       </section>
 
-      {/* FOOTER */}
+      {/* DASHBOARD INFO */}
+      <section
+        id="dashboard-info"
+        className="mx-auto max-w-7xl px-6 pb-16"
+      >
 
-      <footer className="border-t border-zinc-200/70 px-6 py-8 text-center text-sm text-zinc-400">
+        <div className="grid gap-5 md:grid-cols-2">
+
+          {/* HOW IT WORKS */}
+          <div className="rounded-[28px] border border-white/90 bg-white/45 p-7 shadow-sm backdrop-blur-2xl">
+
+            <div className="flex items-center gap-4">
+
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-violet-100 text-violet-600">
+                <Brain size={22} />
+              </div>
+
+              <div>
+
+                <p className="text-xs font-black tracking-widest text-violet-600">
+                  HOW IT WORKS
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black">
+                  Teach. Learn. Exchange.
+                </h2>
+
+              </div>
+
+            </div>
+
+            <div className="mt-6 space-y-4">
+
+              <Step
+                number="01"
+                title="Add your skills"
+                text="Tell us what you can teach and what you want to learn."
+              />
+
+              <Step
+                number="02"
+                title="Verify your skills"
+                text="Use certificates or take a quick quiz to verify what you know."
+              />
+
+              <Step
+                number="03"
+                title="Find your exchange"
+                text="We'll find people whose learning goals match your teaching skills."
+              />
+
+            </div>
+
+          </div>
+
+          {/* ACTIVITY */}
+          <div className="rounded-[28px] border border-white/90 bg-white/45 p-7 shadow-sm backdrop-blur-2xl">
+
+            <div className="flex items-center gap-4">
+
+              <div className="grid h-12 w-12 place-items-center rounded-2xl bg-indigo-100 text-indigo-600">
+                <Activity size={22} />
+              </div>
+
+              <div>
+
+                <p className="text-xs font-black tracking-widest text-indigo-600">
+                  YOUR ACTIVITY
+                </p>
+
+                <h2 className="mt-1 text-2xl font-black">
+                  Your SkillSwap journey
+                </h2>
+
+              </div>
+
+            </div>
+
+            <div className="mt-6 space-y-3">
+
+              <ActivityRow
+                icon={<BookOpen size={17} />}
+                title="Skills"
+                text="Add your teaching and learning skills"
+                href="/skills"
+              />
+
+              <ActivityRow
+                icon={<Users size={17} />}
+                title="Matches"
+                text="Discover people who complement your skills"
+                href="/matches"
+              />
+
+              <ActivityRow
+                icon={<Send size={17} />}
+                title="Requests"
+                text="Manage your exchange requests"
+                href="/requests"
+              />
+
+              <ActivityRow
+                icon={<Star size={17} />}
+                title="Profile"
+                text="View your profile and reputation"
+                href="/profile"
+              />
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </section>
+
+      {/* FOOTER */}
+      <footer className="border-t border-white/70 px-6 py-10 text-center text-sm text-zinc-500">
         SkillSwap • Exchange knowledge, not money.
       </footer>
 
@@ -868,77 +714,27 @@ function LoggedInHome({
 }
 
 /* =========================================================
-   SKILL PILL
+   HOME ACTION
    ========================================================= */
 
-function SkillPill({
-  text,
-  verified = false,
-  add = false,
-}: {
-  text: string;
-  verified?: boolean;
-  add?: boolean;
-}) {
-  if (add) {
-    return (
-      <Link
-        href="/skills"
-        className="flex items-center justify-between rounded-xl border border-dashed border-zinc-300 bg-white/50 px-4 py-3 text-sm font-bold text-zinc-400 transition hover:border-violet-300 hover:text-violet-600"
-      >
-        <span>{text}</span>
-
-        <span className="text-lg">
-          +
-        </span>
-
-      </Link>
-    );
-  }
-
-  return (
-    <div className="flex items-center justify-between rounded-xl border border-white bg-white/75 px-4 py-3">
-
-      <span className="text-sm font-bold">
-        {text}
-      </span>
-
-      {verified && (
-        <span className="flex items-center gap-1 text-xs font-bold text-emerald-600">
-
-          <CheckCircle2 size={13} />
-
-          Verified
-
-        </span>
-      )}
-
-    </div>
-  );
-}
-
-/* =========================================================
-   QUICK ACTION
-   ========================================================= */
-
-function QuickAction({
-  href,
+function HomeAction({
   icon,
   title,
   text,
+  href,
 }: {
-  href: string;
   icon: React.ReactNode;
   title: string;
   text: string;
+  href: string;
 }) {
   return (
     <Link
       href={href}
-      className="group flex items-center gap-4 rounded-2xl border border-white bg-white/60 p-4 transition hover:-translate-y-0.5 hover:bg-white hover:shadow-sm"
+      className="group flex items-center gap-4 rounded-2xl border border-white bg-white/55 p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/80 hover:shadow-md"
     >
 
-      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600">
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 transition group-hover:scale-105">
         {icon}
       </div>
 
@@ -948,7 +744,7 @@ function QuickAction({
           {title}
         </p>
 
-        <p className="mt-1 text-xs text-zinc-400">
+        <p className="mt-0.5 text-xs text-zinc-500">
           {text}
         </p>
 
@@ -956,7 +752,7 @@ function QuickAction({
 
       <ArrowRight
         size={16}
-        className="text-zinc-300 transition group-hover:translate-x-1 group-hover:text-violet-600"
+        className="text-zinc-400 transition group-hover:translate-x-1 group-hover:text-violet-600"
       />
 
     </Link>
@@ -1042,6 +838,88 @@ function Feature({
 }
 
 /* =========================================================
+   ACTIVITY ROW
+   ========================================================= */
+
+function ActivityRow({
+  icon,
+  title,
+  text,
+  href,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  text: string;
+  href: string;
+}) {
+  return (
+    <Link
+      href={href}
+      className="group flex items-center gap-4 rounded-2xl border border-white bg-white/55 p-4 transition duration-300 hover:-translate-y-0.5 hover:bg-white/75 hover:shadow-md"
+    >
+
+      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-violet-100 text-violet-600 transition group-hover:scale-105">
+        {icon}
+      </div>
+
+      <div className="min-w-0 flex-1">
+
+        <p className="text-sm font-black">
+          {title}
+        </p>
+
+        <p className="mt-0.5 text-xs text-zinc-500">
+          {text}
+        </p>
+
+      </div>
+
+      <ArrowRight
+        size={16}
+        className="text-zinc-400 transition group-hover:translate-x-1 group-hover:text-violet-600"
+      />
+
+    </Link>
+  );
+}
+
+/* =========================================================
+   STEP
+   ========================================================= */
+
+function Step({
+  number,
+  title,
+  text,
+}: {
+  number: string;
+  title: string;
+  text: string;
+}) {
+  return (
+    <div className="flex gap-4">
+
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-zinc-950 text-xs font-black text-white">
+        {number}
+      </div>
+
+      <div>
+
+        <p className="text-sm font-black">
+          {title}
+        </p>
+
+        <p className="mt-1 text-xs leading-5 text-zinc-500">
+          {text}
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
    AVATAR
    ========================================================= */
 
@@ -1052,13 +930,21 @@ function Avatar({
   avatar: string;
   large?: boolean;
 }) {
+  const avatars: Record<string, string> = {
+    avatar1: "🧑‍💻",
+    avatar2: "🎨",
+    avatar3: "🎮",
+    avatar4: "📚",
+    avatar5: "🚀",
+  };
+
   return (
     <div
       className={`grid ${
         large
-          ? "h-14 w-14 text-2xl"
-          : "h-9 w-9 text-base"
-      } place-items-center rounded-full border border-white bg-white/80 shadow-inner`}
+          ? "h-20 w-20 text-4xl"
+          : "h-10 w-10 text-lg"
+      } place-items-center rounded-full border border-white bg-white/70 shadow-inner backdrop-blur-xl`}
     >
       {avatars[avatar] || "🧑‍💻"}
     </div>

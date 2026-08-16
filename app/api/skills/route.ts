@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "../../../lib/prisma";
 
 /* =========================================================
    GET /api/skills?userId=1
@@ -8,7 +8,8 @@ import { prisma } from "@/app/lib/prisma";
 
 export async function GET(request: NextRequest) {
   try {
-    const userIdParam = request.nextUrl.searchParams.get("userId");
+    const userIdParam =
+      request.nextUrl.searchParams.get("userId");
 
     if (!userIdParam) {
       return NextResponse.json(
@@ -79,7 +80,9 @@ export async function POST(request: NextRequest) {
     }
 
     const cleanName = String(name).trim();
-    const cleanType = String(type).trim().toLowerCase();
+    const cleanType = String(type)
+      .trim()
+      .toLowerCase();
 
     if (!cleanName) {
       return NextResponse.json(
@@ -88,7 +91,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (cleanType !== "teach" && cleanType !== "learn") {
+    if (
+      cleanType !== "teach" &&
+      cleanType !== "learn"
+    ) {
       return NextResponse.json(
         {
           error: "Skill type must be teach or learn",
@@ -110,15 +116,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const existingSkill = await prisma.skill.findFirst({
-      where: {
-        userId: numericUserId,
-        name: {
-          equals: cleanName,
+    const existingSkill =
+      await prisma.skill.findFirst({
+        where: {
+          userId: numericUserId,
+          name: {
+            equals: cleanName,
+          },
+          type: cleanType,
         },
-        type: cleanType,
-      },
-    });
+      });
 
     if (existingSkill) {
       return NextResponse.json(
@@ -144,7 +151,10 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error) {
-    console.error("POST /api/skills error:", error);
+    console.error(
+      "POST /api/skills error:",
+      error
+    );
 
     return NextResponse.json(
       { error: "Failed to create skill" },
@@ -159,11 +169,16 @@ export async function POST(request: NextRequest) {
    Delete a skill
    ========================================================= */
 
-export async function DELETE(request: NextRequest) {
+export async function DELETE(
+  request: NextRequest
+) {
   try {
     const body = await request.json();
 
-    const skillId = Number(body.skillId ?? body.id);
+    const skillId = Number(
+      body.skillId ?? body.id
+    );
+
     const userId = Number(body.userId);
 
     if (!Number.isInteger(skillId)) {
@@ -204,7 +219,10 @@ export async function DELETE(request: NextRequest) {
       success: true,
     });
   } catch (error) {
-    console.error("DELETE /api/skills error:", error);
+    console.error(
+      "DELETE /api/skills error:",
+      error
+    );
 
     return NextResponse.json(
       { error: "Failed to delete skill" },
@@ -219,7 +237,9 @@ export async function DELETE(request: NextRequest) {
    Update verification information
    ========================================================= */
 
-export async function PATCH(request: NextRequest) {
+export async function PATCH(
+  request: NextRequest
+) {
   try {
     const body = await request.json();
 
@@ -286,21 +306,27 @@ export async function PATCH(request: NextRequest) {
 
     if (quizScore !== undefined) {
       updateData.quizScore =
-        quizScore === null ? null : Number(quizScore);
+        quizScore === null
+          ? null
+          : Number(quizScore);
     }
 
-    const updatedSkill = await prisma.skill.update({
-      where: {
-        id: numericSkillId,
-      },
-      data: updateData,
-    });
+    const updatedSkill =
+      await prisma.skill.update({
+        where: {
+          id: numericSkillId,
+        },
+        data: updateData,
+      });
 
     return NextResponse.json({
       skill: updatedSkill,
     });
   } catch (error) {
-    console.error("PATCH /api/skills error:", error);
+    console.error(
+      "PATCH /api/skills error:",
+      error
+    );
 
     return NextResponse.json(
       { error: "Failed to update skill" },

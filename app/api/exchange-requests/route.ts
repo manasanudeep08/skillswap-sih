@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/app/lib/prisma";
+import { prisma } from "../../../lib/prisma";
 
 /*
   GET
@@ -30,47 +30,49 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const received = await prisma.exchangeRequest.findMany({
-      where: {
-        receiverId: userId,
-      },
-      include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            bio: true,
-            avatar: true,
-            skills: true,
+    const received =
+      await prisma.exchangeRequest.findMany({
+        where: {
+          receiverId: userId,
+        },
+        include: {
+          sender: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              bio: true,
+              avatar: true,
+              skills: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
-    const sent = await prisma.exchangeRequest.findMany({
-      where: {
-        senderId: userId,
-      },
-      include: {
-        receiver: {
-          select: {
-            id: true,
-            name: true,
-            username: true,
-            bio: true,
-            avatar: true,
-            skills: true,
+    const sent =
+      await prisma.exchangeRequest.findMany({
+        where: {
+          senderId: userId,
+        },
+        include: {
+          receiver: {
+            select: {
+              id: true,
+              name: true,
+              username: true,
+              bio: true,
+              avatar: true,
+              skills: true,
+            },
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-    });
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
 
     return NextResponse.json({
       received,
@@ -128,7 +130,8 @@ export async function POST(request: NextRequest) {
     if (senderId === receiverId) {
       return NextResponse.json(
         {
-          error: "You cannot send an exchange request to yourself",
+          error:
+            "You cannot send an exchange request to yourself",
         },
         { status: 400 }
       );
@@ -267,6 +270,7 @@ export async function PATCH(request: NextRequest) {
 
     const requestId = Number(body.requestId);
     const userId = Number(body.userId);
+
     const status = String(body.status || "")
       .trim()
       .toLowerCase();
