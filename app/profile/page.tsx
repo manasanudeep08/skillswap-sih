@@ -346,19 +346,25 @@ export default function ProfilePage() {
         profile.otherUrl || "",
 
       emailVisibility:
-        profile.privacy
-          ?.emailVisibility ||
-        "accepted",
+        (profile.privacy?.emailVisibility === "private" ||
+        profile.privacy?.emailVisibility === "matches" ||
+        profile.privacy?.emailVisibility === "accepted"
+          ? profile.privacy.emailVisibility
+          : "accepted"),
 
       phoneVisibility:
-        profile.privacy
-          ?.phoneVisibility ||
-        "accepted",
+        (profile.privacy?.phoneVisibility === "private" ||
+        profile.privacy?.phoneVisibility === "matches" ||
+        profile.privacy?.phoneVisibility === "accepted"
+          ? profile.privacy.phoneVisibility
+          : "accepted"),
 
       socialVisibility:
-        profile.privacy
-          ?.socialVisibility ||
-        "matches",
+        (profile.privacy?.socialVisibility === "private" ||
+        profile.privacy?.socialVisibility === "matches" ||
+        profile.privacy?.socialVisibility === "accepted"
+          ? profile.privacy.socialVisibility
+          : "matches"),
     });
 
     setError("");

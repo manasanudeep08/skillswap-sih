@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   Clock,
   Star,
+  Trash2,
   X,
 } from "lucide-react";
 
@@ -16,6 +17,7 @@ type RequestUser = {
   username: string;
   bio: string | null;
   avatar: string;
+
   skills: {
     id: number;
     name: string;
@@ -28,10 +30,20 @@ type ExchangeRequest = {
   id: number;
   senderId: number;
   receiverId: number;
+  skillId?: number | null;
+  message?: string | null;
   status: string;
   createdAt: string;
+
   sender?: RequestUser;
   receiver?: RequestUser;
+
+  skill?: {
+    id: number;
+    name: string;
+    type: string;
+    verified: boolean;
+  } | null;
 };
 
 type CurrentUser = {
@@ -67,6 +79,15 @@ export default function RequestsPage() {
   const [completing, setCompleting] =
     useState<number | null>(null);
 
+  const [deleting, setDeleting] =
+    useState<number | null>(null);
+
+  /*
+   * =====================================================
+   * LOAD REQUESTS
+   * =====================================================
+   */
+
   useEffect(() => {
     loadRequests();
   }, []);
@@ -101,6 +122,15 @@ export default function RequestsPage() {
       const data =
         await response.json();
 
+      if (!response.ok) {
+        console.error(
+          data.error ||
+            "Failed to load requests"
+        );
+
+        return;
+      }
+
       setReceived(
         data.received || []
       );
@@ -118,6 +148,12 @@ export default function RequestsPage() {
     }
   }
 
+  /*
+   * =====================================================
+   * ACCEPT / REJECT REQUEST
+   * =====================================================
+   */
+
   async function updateRequest(
     requestId: number,
     status:
@@ -132,10 +168,12 @@ export default function RequestsPage() {
           "/api/exchange-requests",
           {
             method: "PATCH",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
+
             body: JSON.stringify({
               requestId,
               userId: user.id,
@@ -144,16 +182,36 @@ export default function RequestsPage() {
           }
         );
 
-      if (response.ok) {
-        loadRequests();
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        alert(
+          data.error ||
+            "Unable to update request."
+        );
+
+        return;
       }
+
+      await loadRequests();
     } catch (error) {
       console.error(
         "Failed to update request:",
         error
       );
+
+      alert(
+        "Something went wrong."
+      );
     }
   }
+
+  /*
+   * =====================================================
+   * COMPLETE EXCHANGE
+   * =====================================================
+   */
 
   async function completeExchange(
     requestId: number
@@ -168,10 +226,12 @@ export default function RequestsPage() {
           "/api/exchange-requests/complete",
           {
             method: "PATCH",
+
             headers: {
               "Content-Type":
                 "application/json",
             },
+
             body: JSON.stringify({
               requestId,
               userId: user.id,
@@ -187,6 +247,7 @@ export default function RequestsPage() {
           data.error ||
             "Unable to complete exchange."
         );
+
         return;
       }
 
@@ -205,6 +266,96 @@ export default function RequestsPage() {
     }
   }
 
+  /*
+   * =====================================================
+   * DELETE / DISMISS REQUEST
+   * =====================================================
+   */
+
+  async function deleteRequest(
+    requestId: number
+  ) {
+    if (!user) return;
+
+    const confirmed =
+      window.confirm(
+        "Remove this request from your requests?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(requestId);
+
+    try {
+      const response =
+        await fetch(
+          "/api/exchange-requests",
+          {
+            method: "DELETE",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body: JSON.stringify({
+              requestId,
+              userId: user.id,
+            }),
+          }
+        );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        alert(
+          data.error ||
+            "Unable to delete request."
+        );
+
+        return;
+      }
+
+      /*
+       * Remove immediately from the UI.
+       */
+
+      setReceived((current) =>
+        current.filter(
+          (item) =>
+            item.id !== requestId
+        )
+      );
+
+      setSent((current) =>
+        current.filter(
+          (item) =>
+            item.id !== requestId
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Delete request error:",
+        error
+      );
+
+      alert(
+        "Something went wrong while deleting the request."
+      );
+    } finally {
+      setDeleting(null);
+    }
+  }
+
+  /*
+   * =====================================================
+   * LOGOUT
+   * =====================================================
+   */
+
   async function logout() {
     await fetch("/api/logout", {
       method: "POST",
@@ -213,6 +364,12 @@ export default function RequestsPage() {
     window.location.href = "/";
   }
 
+  /*
+   * =====================================================
+   * LOADING
+   * =====================================================
+   */
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#eef0f8]">
@@ -220,6 +377,12 @@ export default function RequestsPage() {
       </main>
     );
   }
+
+  /*
+   * =====================================================
+   * PAGE
+   * =====================================================
+   */
 
   return (
     <main className="min-h-screen bg-[#eef0f8] text-zinc-950">
@@ -234,7 +397,8 @@ export default function RequestsPage() {
             href="/"
             className="shrink-0 text-2xl font-black"
           >
-            Skill<span className="text-violet-600">
+            Skill
+            <span className="text-violet-600">
               Swap
             </span>
           </Link>
@@ -329,7 +493,9 @@ export default function RequestsPage() {
         </p>
 
 
-        {/* RECEIVED */}
+        {/* =================================================
+            RECEIVED
+            ================================================= */}
 
         <section className="mt-10">
 
@@ -344,7 +510,9 @@ export default function RequestsPage() {
                 request.status ===
                 "pending"
             ).length > 0 && (
+
               <span className="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-black text-violet-600">
+
                 {
                   received.filter(
                     (request) =>
@@ -352,18 +520,27 @@ export default function RequestsPage() {
                       "pending"
                   ).length
                 }
+
               </span>
+
             )}
 
           </div>
 
+
           <div className="mt-5 space-y-4">
 
             {received.length === 0 ? (
-              <EmptyState text="No exchange requests yet." />
+
+              <EmptyState
+                text="No exchange requests yet."
+              />
+
             ) : (
+
               received.map(
                 (request) => (
+
                   <ReceivedRequest
                     key={request.id}
                     request={request}
@@ -373,13 +550,22 @@ export default function RequestsPage() {
                     onComplete={
                       completeExchange
                     }
+                    onDelete={
+                      deleteRequest
+                    }
                     completing={
                       completing ===
                       request.id
                     }
+                    deleting={
+                      deleting ===
+                      request.id
+                    }
                   />
+
                 )
               )
+
             )}
 
           </div>
@@ -387,7 +573,9 @@ export default function RequestsPage() {
         </section>
 
 
-        {/* SENT */}
+        {/* =================================================
+            SENT
+            ================================================= */}
 
         <section className="mt-12">
 
@@ -398,23 +586,38 @@ export default function RequestsPage() {
           <div className="mt-5 space-y-4">
 
             {sent.length === 0 ? (
-              <EmptyState text="You haven't sent any requests yet." />
+
+              <EmptyState
+                text="You haven't sent any requests yet."
+              />
+
             ) : (
+
               sent.map(
                 (request) => (
+
                   <SentRequest
                     key={request.id}
                     request={request}
                     onComplete={
                       completeExchange
                     }
+                    onDelete={
+                      deleteRequest
+                    }
                     completing={
                       completing ===
                       request.id
                     }
+                    deleting={
+                      deleting ===
+                      request.id
+                    }
                   />
+
                 )
               )
+
             )}
 
           </div>
@@ -436,19 +639,30 @@ function ReceivedRequest({
   request,
   onUpdate,
   onComplete,
+  onDelete,
   completing,
+  deleting,
 }: {
   request: ExchangeRequest;
+
   onUpdate: (
     id: number,
     status:
       | "accepted"
       | "rejected"
   ) => void;
+
   onComplete: (
     id: number
   ) => void;
+
+  onDelete: (
+    id: number
+  ) => void;
+
   completing: boolean;
+
+  deleting: boolean;
 }) {
   const user =
     request.sender;
@@ -483,13 +697,23 @@ function ReceivedRequest({
               with you.
             </p>
 
+            {request.skill && (
+              <p className="mt-1 text-sm font-bold text-violet-600">
+                Wants to learn:{" "}
+                {request.skill.name}
+              </p>
+            )}
+
           </div>
 
         </div>
 
 
+        {/* ACTIONS */}
+
         {request.status ===
         "pending" ? (
+
           <div className="flex gap-2">
 
             <button
@@ -519,8 +743,10 @@ function ReceivedRequest({
             </button>
 
           </div>
+
         ) : request.status ===
           "accepted" ? (
+
           <button
             onClick={() =>
               onComplete(
@@ -538,24 +764,68 @@ function ReceivedRequest({
               ? "Completing..."
               : "Mark Exchange Complete"}
           </button>
+
         ) : request.status ===
           "completed" ? (
-          <Link
-            href={`/rate/${request.id}`}
-            className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600"
+
+          <div className="flex flex-wrap gap-2">
+
+            <Link
+              href={`/rate/${request.id}`}
+              className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600"
+            >
+              <Star
+                size={16}
+                fill="currentColor"
+              />
+              Rate Exchange
+            </Link>
+
+            <button
+              onClick={() =>
+                onDelete(
+                  request.id
+                )
+              }
+              disabled={deleting}
+              className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+
+              {deleting
+                ? "Deleting..."
+                : "Delete"}
+            </button>
+
+          </div>
+
+        ) : request.status ===
+          "rejected" ? (
+
+          <button
+            onClick={() =>
+              onDelete(
+                request.id
+              )
+            }
+            disabled={deleting}
+            className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
           >
-            <Star
-              size={16}
-              fill="currentColor"
-            />
-            Rate Exchange
-          </Link>
+            <Trash2 size={16} />
+
+            {deleting
+              ? "Deleting..."
+              : "Delete"}
+          </button>
+
         ) : (
+
           <RequestStatus
             status={
               request.status
             }
           />
+
         )}
 
       </div>
@@ -572,13 +842,23 @@ function ReceivedRequest({
 function SentRequest({
   request,
   onComplete,
+  onDelete,
   completing,
+  deleting,
 }: {
   request: ExchangeRequest;
+
   onComplete: (
     id: number
   ) => void;
+
+  onDelete: (
+    id: number
+  ) => void;
+
   completing: boolean;
+
+  deleting: boolean;
 }) {
   const user =
     request.receiver;
@@ -612,13 +892,23 @@ function SentRequest({
               Exchange request sent.
             </p>
 
+            {request.skill && (
+              <p className="mt-1 text-sm font-bold text-violet-600">
+                Learning:{" "}
+                {request.skill.name}
+              </p>
+            )}
+
           </div>
 
         </div>
 
 
+        {/* ACTIONS */}
+
         {request.status ===
         "accepted" ? (
+
           <button
             onClick={() =>
               onComplete(
@@ -636,24 +926,68 @@ function SentRequest({
               ? "Completing..."
               : "Mark Exchange Complete"}
           </button>
+
         ) : request.status ===
           "completed" ? (
-          <Link
-            href={`/rate/${request.id}`}
-            className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600"
+
+          <div className="flex flex-wrap gap-2">
+
+            <Link
+              href={`/rate/${request.id}`}
+              className="flex items-center gap-2 rounded-xl bg-amber-500 px-4 py-3 text-sm font-black text-white transition hover:bg-amber-600"
+            >
+              <Star
+                size={16}
+                fill="currentColor"
+              />
+              Rate Exchange
+            </Link>
+
+            <button
+              onClick={() =>
+                onDelete(
+                  request.id
+                )
+              }
+              disabled={deleting}
+              className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
+            >
+              <Trash2 size={16} />
+
+              {deleting
+                ? "Deleting..."
+                : "Delete"}
+            </button>
+
+          </div>
+
+        ) : request.status ===
+          "rejected" ? (
+
+          <button
+            onClick={() =>
+              onDelete(
+                request.id
+              )
+            }
+            disabled={deleting}
+            className="flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-bold text-red-600 transition hover:bg-red-100 disabled:opacity-50"
           >
-            <Star
-              size={16}
-              fill="currentColor"
-            />
-            Rate Exchange
-          </Link>
+            <Trash2 size={16} />
+
+            {deleting
+              ? "Deleting..."
+              : "Delete"}
+          </button>
+
         ) : (
+
           <RequestStatus
             status={
               request.status
             }
           />
+
         )}
 
       </div>
@@ -672,8 +1006,9 @@ function RequestStatus({
 }: {
   status: string;
 }) {
-  if (status ===
-      "accepted") {
+  if (
+    status === "accepted"
+  ) {
     return (
       <div className="flex items-center gap-2 rounded-xl bg-emerald-50 px-4 py-3 text-sm font-black text-emerald-600">
         <CheckCircle2 size={16} />
@@ -682,8 +1017,9 @@ function RequestStatus({
     );
   }
 
-  if (status ===
-      "completed") {
+  if (
+    status === "completed"
+  ) {
     return (
       <div className="flex items-center gap-2 rounded-xl bg-violet-50 px-4 py-3 text-sm font-black text-violet-600">
         <CheckCircle2 size={16} />
@@ -692,8 +1028,9 @@ function RequestStatus({
     );
   }
 
-  if (status ===
-      "rejected") {
+  if (
+    status === "rejected"
+  ) {
     return (
       <div className="flex items-center gap-2 rounded-xl bg-red-50 px-4 py-3 text-sm font-black text-red-500">
         <X size={16} />

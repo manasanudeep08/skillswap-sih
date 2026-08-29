@@ -8,8 +8,19 @@ type SkillData = {
   verified: boolean;
 };
 
+type SkillMatch = {
+  mine: string;
+  theirs: string;
+  verified: boolean;
+  theirsId: number;
+  mineId: number;
+};
+
 function normalizeSkill(name: string) {
-  return name.trim().toLowerCase().replace(/\s+/g, " ");
+  return name
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
 }
 
 function findMatches(
@@ -18,17 +29,18 @@ function findMatches(
   theirSkills: SkillData[]
 ) {
   const theirTeach = theirSkills.filter(
-    (skill) => skill.type.toLowerCase() === "teach"
+    (skill) =>
+      skill.type.toLowerCase() === "teach"
   );
 
   const theirLearn = theirSkills.filter(
-    (skill) => skill.type.toLowerCase() === "learn"
+    (skill) =>
+      skill.type.toLowerCase() === "learn"
   );
 
   /*
-   * Direction 1:
-   * I want to learn something
-   * They can teach it
+   * I WANT TO LEARN
+   * They can TEACH
    */
   const learnFromThem = myLearn
     .map((mySkill) => {
@@ -38,24 +50,28 @@ function findMatches(
           normalizeSkill(mySkill.name)
       );
 
-      return match
-        ? {
-            mine: mySkill.name,
-            theirs: match.name,
-            verified: match.verified,
-          }
-        : null;
+      if (!match) {
+        return null;
+      }
+
+      return {
+        mine: mySkill.name,
+        theirs: match.name,
+        verified: match.verified,
+
+        // IMPORTANT:
+        // ID of THEIR skill that I want to learn
+        theirsId: match.id,
+
+        // ID of MY skill
+        mineId: mySkill.id,
+      };
     })
-    .filter(Boolean) as {
-    mine: string;
-    theirs: string;
-    verified: boolean;
-  }[];
+    .filter(Boolean) as SkillMatch[];
 
   /*
-   * Direction 2:
-   * I can teach something
-   * They want to learn it
+   * I CAN TEACH
+   * They want to LEARN
    */
   const learnFromMe = myTeach
     .map((mySkill) => {
@@ -65,20 +81,27 @@ function findMatches(
           normalizeSkill(mySkill.name)
       );
 
-      return match
-        ? {
-            mine: mySkill.name,
-            theirs: match.name,
-            verified: mySkill.verified,
-          }
-        : null;
-    })
-    .filter(Boolean) as {
-    mine: string;
-    theirs: string;
-    verified: boolean;
-  }[];
+      if (!match) {
+        return null;
+      }
 
+      return {
+        mine: mySkill.name,
+        theirs: match.name,
+        verified: mySkill.verified,
+
+        // ID of MY skill that I teach
+        mineId: mySkill.id,
+
+        // ID of THEIR learning skill
+        theirsId: match.id,
+      };
+    })
+    .filter(Boolean) as SkillMatch[];
+
+  /*
+   * No match
+   */
   if (
     learnFromThem.length === 0 &&
     learnFromMe.length === 0
@@ -87,52 +110,132 @@ function findMatches(
   }
 
   /*
-   * Calculate compatibility.
+   * =====================================================
+   * COMPATIBILITY SCORE
+   * =====================================================
    *
-   * 90% of the score comes from skill compatibility.
-   * 10% comes from verification of matching teaching skills.
+   * Perfect two-way exchange = 100%
+   *
+   * Example:
+   *
+   * Me:
+   *   Teach Video Editing
+   *   Learn C++
+   *
+   * Them:
+   *   Teach C++
+   *   Learn Video Editing
+   *
+   * = 100%
+   *
+   * Verification does NOT affect compatibility.
    */
 
-  const learnRatio =
+  let score = 0;
+
+  /*
+   * If both users have Teach + Learn skills,
+   * calculate both directions.
+   */
+  if (
+    myTeach.length > 0 &&
     myLearn.length > 0
-      ? learnFromThem.length / myLearn.length
-      : 0;
+  ) {
+    const learnRatio =
+      learnFromThem.length /
+      myLearn.length;
 
-  const teachRatio =
-    myTeach.length > 0
-      ? learnFromMe.length / myTeach.length
-      : 0;
+    const teachRatio =
+      learnFromMe.length /
+      myTeach.length;
 
-  const compatibility =
-    ((learnRatio + teachRatio) / 2) * 90;
+    score =
+      ((learnRatio + teachRatio) / 2) * 100;
+  }
 
-  const allMatchingSkills = [
-    ...learnFromThem,
-    ...learnFromMe,
-  ];
+  /*
+   * Only learning skills
+   */
+  else if (myLearn.length > 0) {
+    score =
+      (learnFromThem.length /
+        myLearn.length) *
+      100;
+  }
 
-  const verifiedMatches = allMatchingSkills.filter(
-    (match) => match.verified
-  ).length;
+  /*
+   * Only teaching skills
+   */
+  else if (myTeach.length > 0) {
+    score =
+      (learnFromMe.length /
+        myTeach.length) *
+      100;
+  }
 
-  const verificationRatio =
-    allMatchingSkills.length > 0
-      ? verifiedMatches / allMatchingSkills.length
-      : 0;
-
-  const verificationBonus = verificationRatio * 10;
-
-  const score = Math.min(
+  score = Math.min(
     100,
-    Math.round(
-      compatibility + verificationBonus
-    )
+    Math.max(0, Math.round(score))
   );
+
+  /*
+   * SPECIAL CASE:
+   *
+   * If there is at least one match in BOTH
+   * directions, make sure a complete reciprocal
+   * exchange is displayed as 100%.
+   *
+   * This prevents unrelated extra skills from
+   * making a perfect exchange look weaker.
+   */
+
+  if (
+    learnFromThem.length > 0 &&
+    learnFromMe.length > 0
+  ) {
+    const matchedLearnSkills =
+      new Set(
+        learnFromThem.map((skill) =>
+          normalizeSkill(skill.theirs)
+        )
+      );
+
+    const matchedTeachSkills =
+      new Set(
+        learnFromMe.map((skill) =>
+          normalizeSkill(skill.mine)
+        )
+      );
+
+    const allMyLearnSkillsMatch =
+      myLearn.every((skill) =>
+        matchedLearnSkills.has(
+          normalizeSkill(skill.name)
+        )
+      );
+
+    const allMyTeachSkillsMatch =
+      myTeach.every((skill) =>
+        matchedTeachSkills.has(
+          normalizeSkill(skill.name)
+        )
+      );
+
+    if (
+      allMyLearnSkillsMatch &&
+      allMyTeachSkillsMatch
+    ) {
+      score = 100;
+    }
+  }
 
   return {
     score,
+
     learnFromThem,
+
     learnFromMe,
+
     totalMatches:
       learnFromThem.length +
       learnFromMe.length,
@@ -149,24 +252,40 @@ export async function GET(
 ) {
   try {
     const userIdParam =
-      request.nextUrl.searchParams.get("userId");
+      request.nextUrl.searchParams.get(
+        "userId"
+      );
 
     if (!userIdParam) {
       return NextResponse.json(
-        { error: "User ID is required" },
-        { status: 400 }
+        {
+          error:
+            "User ID is required",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
-    const userId = Number(userIdParam);
+    const userId =
+      Number(userIdParam);
 
     if (!Number.isInteger(userId)) {
       return NextResponse.json(
-        { error: "Invalid user ID" },
-        { status: 400 }
+        {
+          error:
+            "Invalid user ID",
+        },
+        {
+          status: 400,
+        }
       );
     }
 
+    /*
+     * Load current user
+     */
     const currentUser =
       await prisma.user.findUnique({
         where: {
@@ -179,26 +298,35 @@ export async function GET(
 
     if (!currentUser) {
       return NextResponse.json(
-        { error: "User not found" },
-        { status: 404 }
+        {
+          error:
+            "User not found",
+        },
+        {
+          status: 404,
+        }
       );
     }
 
-    const myTeach = currentUser.skills.filter(
-      (skill) =>
-        skill.type.toLowerCase() ===
-        "teach"
-    );
+    /*
+     * Separate my skills
+     */
+    const myTeach =
+      currentUser.skills.filter(
+        (skill) =>
+          skill.type.toLowerCase() ===
+          "teach"
+      );
 
-    const myLearn = currentUser.skills.filter(
-      (skill) =>
-        skill.type.toLowerCase() ===
-        "learn"
-    );
+    const myLearn =
+      currentUser.skills.filter(
+        (skill) =>
+          skill.type.toLowerCase() ===
+          "learn"
+      );
 
     /*
-     * If the user hasn't added any skills yet,
-     * there is nothing to match.
+     * No skills
      */
     if (
       myTeach.length === 0 &&
@@ -212,7 +340,7 @@ export async function GET(
     }
 
     /*
-     * Load all other users and their skills.
+     * Load all other users
      */
     const otherUsers =
       await prisma.user.findMany({
@@ -229,13 +357,17 @@ export async function GET(
         },
       });
 
+    /*
+     * Calculate matches
+     */
     const matches = otherUsers
       .map((otherUser) => {
-        const result = findMatches(
-          myTeach,
-          myLearn,
-          otherUser.skills
-        );
+        const result =
+          findMatches(
+            myTeach,
+            myLearn,
+            otherUser.skills
+          );
 
         if (!result) {
           return null;
@@ -245,9 +377,11 @@ export async function GET(
           user: {
             id: otherUser.id,
             name: otherUser.name,
-            username: otherUser.username,
+            username:
+              otherUser.username,
             bio: otherUser.bio,
-            avatar: otherUser.avatar,
+            avatar:
+              otherUser.avatar,
           },
 
           score: result.score,
@@ -262,13 +396,17 @@ export async function GET(
             result.totalMatches,
         };
       })
-      .filter(Boolean)
-      .sort((a, b) => {
-        return (
-          (b?.score ?? 0) -
-          (a?.score ?? 0)
-        );
-      });
+      .filter(
+        (
+          match
+        ): match is NonNullable<
+          typeof match
+        > => match !== null
+      )
+      .sort(
+        (a, b) =>
+          b.score - a.score
+      );
 
     return NextResponse.json({
       matches,
@@ -281,7 +419,8 @@ export async function GET(
 
     return NextResponse.json(
       {
-        error: "Failed to find matches",
+        error:
+          "Failed to find matches",
       },
       {
         status: 500,

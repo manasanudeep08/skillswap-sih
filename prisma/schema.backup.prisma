@@ -41,9 +41,6 @@ model User {
 
   sentRequests     ExchangeRequest[] @relation("SentRequests")
   receivedRequests ExchangeRequest[] @relation("ReceivedRequests")
-
-  ratingsGiven    Rating[] @relation("Rating_reviewerIdToUser")
-  ratingsReceived Rating[] @relation("Rating_revieweeIdToUser")
 }
 
 model Skill {
@@ -58,9 +55,6 @@ model Skill {
 
   userId Int
   user   User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  // Exchange requests using this skill
-  exchangeRequests ExchangeRequest[]
 }
 
 model Session {
@@ -83,25 +77,4 @@ model ExchangeRequest {
 
   sender   User @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ReceivedRequests", fields: [receiverId], references: [id], onDelete: Cascade)
-
-  // The teaching skill attached to this exchange
-  skill Skill? @relation(fields: [skillId], references: [id], onDelete: SetNull)
-
-  ratings Rating[]
-}
-
-model Rating {
-  id         Int      @id @default(autoincrement())
-  requestId  Int
-  reviewerId Int
-  revieweeId Int
-  stars      Int
-  comment    String?
-  createdAt  DateTime @default(now())
-
-  reviewer User            @relation("Rating_reviewerIdToUser", fields: [reviewerId], references: [id], onDelete: Cascade)
-  reviewee User            @relation("Rating_revieweeIdToUser", fields: [revieweeId], references: [id], onDelete: Cascade)
-  request  ExchangeRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-
-  @@unique([requestId, reviewerId])
 }

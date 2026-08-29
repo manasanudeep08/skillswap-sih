@@ -25,6 +25,13 @@ type SkillMatch = {
   mine: string;
   theirs: string;
   verified: boolean;
+
+  // IMPORTANT
+  // ID of the skill the other person will teach you
+  theirsId?: number;
+
+  // ID of your skill that you teach them
+  mineId?: number;
 };
 
 type Match = {
@@ -67,9 +74,7 @@ export default function MatchesPage() {
   }, []);
 
   useEffect(() => {
-    if (!toast) {
-      return;
-    }
+    if (!toast) return;
 
     const timer = setTimeout(() => {
       setToast(null);
@@ -138,10 +143,27 @@ export default function MatchesPage() {
     }
   }
 
+  /*
+   * Send exchange request.
+   *
+   * IMPORTANT:
+   * We now send the skillId of the skill
+   * that the current user wants to learn.
+   */
   async function sendExchangeRequest(
-    receiverId: number
+    receiverId: number,
+    skillId: number
   ) {
     if (!user) {
+      return;
+    }
+
+    if (!Number.isInteger(skillId)) {
+      setToast({
+        type: "error",
+        message:
+          "No learning skill was selected for this exchange.",
+      });
       return;
     }
 
@@ -166,9 +188,14 @@ export default function MatchesPage() {
           headers: {
             "Content-Type": "application/json",
           },
+
+          /*
+           * THIS WAS THE MISSING PART
+           */
           body: JSON.stringify({
             senderId: user.id,
             receiverId,
+            skillId,
           }),
         }
       );
@@ -239,9 +266,7 @@ export default function MatchesPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#eef0f8] text-zinc-950">
 
-      {/* =====================================================
-          BACKGROUND
-          ===================================================== */}
+      {/* BACKGROUND */}
 
       <div className="pointer-events-none fixed inset-0 -z-10">
 
@@ -261,10 +286,7 @@ export default function MatchesPage() {
         />
       </div>
 
-
-      {/* =====================================================
-          REQUEST TOAST
-          ===================================================== */}
+      {/* TOAST */}
 
       {toast && (
         <div className="fixed right-5 top-5 z-[100] w-[calc(100%-40px)] max-w-sm">
@@ -316,34 +338,16 @@ export default function MatchesPage() {
 
             </div>
 
-            <div className="absolute bottom-0 left-0 h-1 w-full overflow-hidden bg-zinc-100">
-
-              <div
-                className={`h-full animate-[toastProgress_5s_linear_forwards] ${
-                  toast.type === "success"
-                    ? "bg-emerald-500"
-                    : "bg-red-500"
-                }`}
-              />
-
-            </div>
-
           </div>
 
         </div>
       )}
 
-
-      {/* =====================================================
-          NAVBAR
-          SAME STRUCTURE AS HOME
-          ===================================================== */}
+      {/* NAVBAR */}
 
       <nav className="sticky top-0 z-50 border-b border-white/70 bg-white/45 backdrop-blur-2xl">
 
         <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-6">
-
-          {/* LOGO */}
 
           <Link
             href="/"
@@ -355,12 +359,7 @@ export default function MatchesPage() {
             </span>
           </Link>
 
-
-          {/* NAVIGATION */}
-
           <div className="hidden items-center gap-2 md:flex">
-
-            {/* HOME */}
 
             <Link
               href="/"
@@ -369,9 +368,6 @@ export default function MatchesPage() {
               Home
             </Link>
 
-
-            {/* MY SKILLS */}
-
             <Link
               href="/skills"
               className="rounded-xl px-4 py-2 text-sm font-bold text-zinc-600 transition hover:bg-white/70 hover:text-zinc-950"
@@ -379,18 +375,12 @@ export default function MatchesPage() {
               My Skills
             </Link>
 
-
-            {/* MATCHES - ACTIVE */}
-
             <Link
               href="/matches"
-              className="rounded-xl bg-violet-100 px-4 py-2 text-sm font-black text-violet-700 shadow-sm transition hover:bg-violet-100"
+              className="rounded-xl bg-violet-100 px-4 py-2 text-sm font-black text-violet-700"
             >
               Matches
             </Link>
-
-
-            {/* REQUESTS */}
 
             <Link
               href="/requests"
@@ -401,19 +391,16 @@ export default function MatchesPage() {
 
           </div>
 
-
-          {/* ACCOUNT */}
-
           <div className="flex items-center gap-3">
-
-            {/* PROFILE CARD */}
 
             <Link
               href="/profile"
-              className="flex items-center gap-3 rounded-2xl border border-white/90 bg-white/55 px-3 py-2 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/80"
+              className="flex items-center gap-3 rounded-2xl border border-white/90 bg-white/55 px-3 py-2 shadow-sm backdrop-blur-xl"
             >
 
-              <Avatar avatar={user?.avatar || "avatar1"} />
+              <Avatar
+                avatar={user?.avatar || "avatar1"}
+              />
 
               <div className="hidden text-left sm:block">
 
@@ -429,12 +416,9 @@ export default function MatchesPage() {
 
             </Link>
 
-
-            {/* LOGOUT */}
-
             <button
               onClick={logout}
-              className="grid h-10 w-10 place-items-center rounded-xl border border-white/90 bg-white/55 text-zinc-500 shadow-sm backdrop-blur-xl transition hover:bg-red-50 hover:text-red-500"
+              className="grid h-10 w-10 place-items-center rounded-xl border border-white/90 bg-white/55 text-zinc-500 shadow-sm hover:bg-red-50 hover:text-red-500"
               title="Logout"
             >
               <LogOut size={17} />
@@ -446,32 +430,25 @@ export default function MatchesPage() {
 
       </nav>
 
-
-      {/* =====================================================
-          MAIN
-          ===================================================== */}
+      {/* MAIN */}
 
       <section className="mx-auto max-w-6xl px-6 py-12 md:py-16">
-
-        {/* PAGE HEADER */}
 
         <div className="mb-10">
 
           <Link
             href="/"
-            className="mb-6 flex w-fit items-center gap-2 text-sm font-bold text-zinc-500 transition hover:text-violet-600"
+            className="mb-6 flex w-fit items-center gap-2 text-sm font-bold text-zinc-500 hover:text-violet-600"
           >
             <ArrowLeft size={16} />
             Home
           </Link>
-
 
           <div className="flex items-start gap-4">
 
             <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-violet-100 text-violet-600 shadow-sm">
               <Users size={25} />
             </div>
-
 
             <div>
 
@@ -495,21 +472,14 @@ export default function MatchesPage() {
 
         </div>
 
-
-        {/* ERROR */}
-
         {error && (
           <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-5 text-sm font-medium text-red-600">
             {error}
           </div>
         )}
 
-
-        {/* NO MATCHES */}
-
         {!error && matches.length === 0 && (
-
-          <div className="rounded-[30px] border border-white bg-white/60 px-6 py-16 text-center shadow-xl shadow-violet-200/20 backdrop-blur-xl">
+          <div className="rounded-[30px] border border-white bg-white/60 px-6 py-16 text-center shadow-xl backdrop-blur-xl">
 
             <div className="mx-auto grid h-16 w-16 place-items-center rounded-2xl bg-violet-100 text-violet-600">
               <Sparkles size={28} />
@@ -521,28 +491,21 @@ export default function MatchesPage() {
 
             <p className="mx-auto mt-3 max-w-lg leading-7 text-zinc-500">
               Add at least one skill you can teach
-              and one skill you want to learn. Once
-              other users have complementary skills,
-              they'll appear here.
+              and one skill you want to learn.
             </p>
 
             <Link
               href="/skills"
-              className="mx-auto mt-7 flex w-fit items-center gap-2 rounded-xl bg-zinc-950 px-6 py-3.5 text-sm font-black text-white transition hover:bg-violet-700"
+              className="mx-auto mt-7 flex w-fit items-center gap-2 rounded-xl bg-zinc-950 px-6 py-3.5 text-sm font-black text-white hover:bg-violet-700"
             >
               Add Your Skills
               <ArrowRight size={17} />
             </Link>
 
           </div>
-
         )}
 
-
-        {/* MATCH COUNT */}
-
         {matches.length > 0 && (
-
           <div className="mb-5 flex items-center justify-between">
 
             <p className="text-sm font-bold text-zinc-500">
@@ -558,11 +521,7 @@ export default function MatchesPage() {
             </div>
 
           </div>
-
         )}
-
-
-        {/* MATCH CARDS */}
 
         <div className="grid gap-5">
 
@@ -581,6 +540,7 @@ export default function MatchesPage() {
                   match.user.id
                 ]
               }
+
               onSendRequest={
                 sendExchangeRequest
               }
@@ -592,31 +552,9 @@ export default function MatchesPage() {
 
       </section>
 
-
-      {/* =====================================================
-          FOOTER
-          ===================================================== */}
-
       <footer className="border-t border-white/70 px-6 py-10 text-center text-sm text-zinc-400">
         SkillSwap • Exchange knowledge, not money.
       </footer>
-
-
-      {/* =====================================================
-          TOAST ANIMATION
-          ===================================================== */}
-
-      <style jsx global>{`
-        @keyframes toastProgress {
-          from {
-            width: 100%;
-          }
-
-          to {
-            width: 0%;
-          }
-        }
-      `}</style>
 
     </main>
   );
@@ -636,10 +574,13 @@ function MatchCard({
   match: Match;
   sent: boolean;
   sending: boolean;
+
   onSendRequest: (
-    receiverId: number
+    receiverId: number,
+    skillId: number
   ) => void;
 }) {
+
   const { user, score } = match;
 
   const scoreLabel =
@@ -651,8 +592,19 @@ function MatchCard({
       ? "Potential match"
       : "Some overlap";
 
+  /*
+   * Pick the first skill that this person
+   * can teach the current user.
+   */
+  const learningSkill =
+    match.learnFromThem?.[0];
+
+  const learningSkillId =
+    learningSkill?.theirsId;
+
   return (
-    <article className="rounded-[28px] border border-white bg-white/65 p-6 shadow-xl shadow-violet-200/10 backdrop-blur-xl transition duration-300 hover:-translate-y-1 hover:shadow-2xl">
+
+    <article className="rounded-[28px] border border-white bg-white/65 p-6 shadow-xl backdrop-blur-xl transition duration-300 hover:-translate-y-1">
 
       {/* TOP */}
 
@@ -684,7 +636,6 @@ function MatchCard({
 
         </div>
 
-
         {/* SCORE */}
 
         <div className="flex items-center gap-3">
@@ -701,7 +652,6 @@ function MatchCard({
 
           </div>
 
-
           <div
             className="grid h-14 w-14 place-items-center rounded-full"
             style={{
@@ -709,9 +659,11 @@ function MatchCard({
                 `conic-gradient(#7c3aed ${score}%, #e9e7f2 0)`,
             }}
           >
+
             <div className="grid h-11 w-11 place-items-center rounded-full bg-white text-xs font-black">
               {score}
             </div>
+
           </div>
 
         </div>
@@ -739,7 +691,7 @@ function MatchCard({
                 (skill, index) => (
 
                   <div
-                    key={`${skill.mine}-${index}`}
+                    key={`${skill.theirs}-${index}`}
                     className="flex items-center justify-between rounded-xl border border-white bg-white/75 px-4 py-3"
                   >
 
@@ -856,14 +808,11 @@ function MatchCard({
           found
         </p>
 
-
         <div className="flex flex-wrap gap-3">
-
-          {/* VIEW PROFILE */}
 
           <Link
             href={`/profile?userId=${user.id}`}
-            className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold text-zinc-700 shadow-sm transition hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+            className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-5 py-3 text-sm font-bold text-zinc-700 shadow-sm hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
           >
             <Users size={16} />
             View Profile
@@ -885,13 +834,33 @@ function MatchCard({
           ) : (
 
             <button
-              onClick={() =>
-                onSendRequest(user.id)
+              onClick={() => {
+
+                if (!learningSkillId) {
+                  alert(
+                    "This match does not have a learning skill attached."
+                  );
+                  return;
+                }
+
+                /*
+                 * IMPORTANT:
+                 * Pass the actual skill ID.
+                 */
+                onSendRequest(
+                  user.id,
+                  learningSkillId
+                );
+
+              }}
+              disabled={
+                sending || !learningSkillId
               }
-              disabled={sending}
               className={`flex items-center gap-2 rounded-xl px-5 py-3 text-sm font-black text-white shadow-lg transition ${
                 sending
                   ? "cursor-wait bg-zinc-400"
+                  : !learningSkillId
+                  ? "cursor-not-allowed bg-zinc-300"
                   : "bg-zinc-950 hover:bg-violet-700"
               }`}
             >
@@ -900,6 +869,8 @@ function MatchCard({
 
               {sending
                 ? "Sending..."
+                : !learningSkillId
+                ? "Skill unavailable"
                 : "Request Exchange"}
 
             </button>
@@ -917,7 +888,6 @@ function MatchCard({
 
 /* =========================================================
    AVATAR
-   Same avatar style used by Home
    ========================================================= */
 
 function Avatar({
@@ -925,9 +895,12 @@ function Avatar({
 }: {
   avatar: string;
 }) {
+
   return (
+
     <div className="grid h-10 w-10 place-items-center rounded-full border border-white bg-white/70 text-lg shadow-inner backdrop-blur-xl">
       {avatars[avatar] || "🧑‍💻"}
     </div>
+
   );
 }

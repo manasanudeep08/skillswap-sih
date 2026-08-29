@@ -7,6 +7,12 @@ export async function POST(request: Request) {
 
     const senderId = Number(body.senderId);
     const receiverId = Number(body.receiverId);
+    const skillId =
+      body.skillId === null ||
+      body.skillId === undefined
+        ? null
+        : Number(body.skillId);
+
     const message =
       typeof body.message === "string"
         ? body.message.trim()
@@ -20,9 +26,19 @@ export async function POST(request: Request) {
         {
           error: "Invalid user information.",
         },
+        { status: 400 }
+      );
+    }
+
+    if (
+      skillId !== null &&
+      !Number.isInteger(skillId)
+    ) {
+      return NextResponse.json(
         {
-          status: 400,
-        }
+          error: "Invalid skill ID.",
+        },
+        { status: 400 }
       );
     }
 
@@ -32,9 +48,7 @@ export async function POST(request: Request) {
           error:
             "You cannot send an exchange request to yourself.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -55,27 +69,32 @@ export async function POST(request: Request) {
         {
           error: "User not found.",
         },
-        {
-          status: 404,
-        }
+        { status: 404 }
       );
     }
 
-    /*
-     * IMPORTANT:
-     *
-     * Check BOTH directions.
-     *
-     * Example:
-     *
-     * A -> B pending
-     *
-     * B should not be able to create:
-     *
-     * B -> A
-     *
-     * while the first request is still active.
-     */
+    let teachingSkill = null;
+
+    if (skillId !== null) {
+      teachingSkill =
+        await prisma.skill.findFirst({
+          where: {
+            id: skillId,
+            userId: receiverId,
+            type: "teach",
+          },
+        });
+
+      if (!teachingSkill) {
+        return NextResponse.json(
+          {
+            error:
+              "The selected teaching skill was not found.",
+          },
+          { status: 404 }
+        );
+      }
+    }
 
     const existingRequest =
       await prisma.exchangeRequest.findFirst({
@@ -90,7 +109,6 @@ export async function POST(request: Request) {
               receiverId: senderId,
             },
           ],
-
           status: {
             in: ["pending", "accepted"],
           },
@@ -101,16 +119,17 @@ export async function POST(request: Request) {
       });
 
     if (existingRequest) {
-      if (existingRequest.status === "accepted") {
+      if (
+        existingRequest.status ===
+        "accepted"
+      ) {
         return NextResponse.json(
           {
             error:
               "You already have an accepted exchange with this person.",
             request: existingRequest,
           },
-          {
-            status: 409,
-          }
+          { status: 409 }
         );
       }
 
@@ -120,15 +139,9 @@ export async function POST(request: Request) {
             "You already have a pending request with this person.",
           request: existingRequest,
         },
-        {
-          status: 409,
-        }
+        { status: 409 }
       );
     }
-
-    /*
-     * Optional message length protection.
-     */
 
     const safeMessage =
       message && message.length > 500
@@ -140,6 +153,7 @@ export async function POST(request: Request) {
         data: {
           senderId,
           receiverId,
+          skillId,
           message: safeMessage,
           status: "pending",
         },
@@ -170,9 +184,7 @@ export async function POST(request: Request) {
         success: true,
         request: exchangeRequest,
       },
-      {
-        status: 201,
-      }
+      { status: 201 }
     );
   } catch (error) {
     console.error(
@@ -185,9 +197,7 @@ export async function POST(request: Request) {
         error:
           "Something went wrong while creating the exchange request.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }

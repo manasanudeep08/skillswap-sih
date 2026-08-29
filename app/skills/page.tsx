@@ -7,8 +7,13 @@ import {
   Award,
   BookOpen,
   Check,
+  ExternalLink,
+  FileText,
+  Link as LinkIcon,
   Plus,
   Trash2,
+  Upload,
+  X,
 } from "lucide-react";
 
 type Skill = {
@@ -39,6 +44,13 @@ export default function SkillsPage() {
   const [learnSkill, setLearnSkill] = useState("");
   const [adding, setAdding] = useState(false);
 
+  const [certificateSkill, setCertificateSkill] =
+    useState<Skill | null>(null);
+
+  const [certificateLink, setCertificateLink] = useState("");
+  const [certificateFile, setCertificateFile] = useState<File | null>(null);
+  const [certificateSaving, setCertificateSaving] = useState(false);
+
   useEffect(() => {
     loadUser();
   }, []);
@@ -60,7 +72,6 @@ export default function SkillsPage() {
       }
 
       setUser(data.user);
-
       await loadSkills(data.user.id);
     } catch (error) {
       console.error("User loading error:", error);
@@ -168,6 +179,128 @@ export default function SkillsPage() {
     }
   }
 
+  function openCertificateModal(skill: Skill) {
+    setCertificateSkill(skill);
+    setCertificateLink("");
+    setCertificateFile(null);
+  }
+
+  function closeCertificateModal() {
+    if (certificateSaving) return;
+
+    setCertificateSkill(null);
+    setCertificateLink("");
+    setCertificateFile(null);
+  }
+
+  function handleCertificateFile(
+    event: React.ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    const allowedTypes = [
+      "image/jpeg",
+      "image/png",
+      "image/webp",
+      "application/pdf",
+    ];
+
+    if (!allowedTypes.includes(file.type)) {
+      alert("Please upload a JPG, PNG, WEBP or PDF file.");
+      event.target.value = "";
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Please keep the certificate file under 2 MB.");
+      event.target.value = "";
+      return;
+    }
+
+    setCertificateFile(file);
+    setCertificateLink("");
+  }
+
+  async function saveCertificate() {
+    if (!user || !certificateSkill) return;
+
+    if (!certificateLink.trim() && !certificateFile) {
+      alert("Please add a certificate link or upload a certificate.");
+      return;
+    }
+
+    setCertificateSaving(true);
+
+    try {
+      let certificateUrl = certificateLink.trim();
+
+      if (certificateFile) {
+        certificateUrl = await fileToDataUrl(certificateFile);
+      }
+
+      const response = await fetch("/api/skills", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          skillId: certificateSkill.id,
+          userId: user.id,
+          certificateUrl,
+          verificationMethod: "certificate",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || "Unable to save certificate.");
+        return;
+      }
+
+      setSkills((current) =>
+        current.map((skill) =>
+          skill.id === certificateSkill.id
+            ? {
+                ...skill,
+                certificateUrl: data.skill.certificateUrl,
+                verificationMethod:
+                  data.skill.verificationMethod,
+              }
+            : skill
+        )
+      );
+
+      closeCertificateModal();
+    } catch (error) {
+      console.error("Certificate save error:", error);
+      alert("Unable to save certificate.");
+    } finally {
+      setCertificateSaving(false);
+    }
+  }
+
+  function fileToDataUrl(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        if (typeof reader.result === "string") {
+          resolve(reader.result);
+        } else {
+          reject(new Error("Could not read file."));
+        }
+      };
+
+      reader.onerror = () =>
+        reject(new Error("Could not read file."));
+
+      reader.readAsDataURL(file);
+    });
+  }
+
   const teachingSkills = skills.filter(
     (skill) => skill.type === "teach"
   );
@@ -262,17 +395,11 @@ export default function SkillsPage() {
               href="/profile"
               className="flex items-center gap-3 rounded-2xl border border-white/90 bg-white/55 px-3 py-2 shadow-sm backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-white/80"
             >
-              <div className="grid h-10 w-10 place-items-center rounded-full border border-white bg-white/70 text-lg shadow-inner">
-                {{
-                  avatar1: "🧑‍💻",
-                  avatar2: "🎨",
-                  avatar3: "🎮",
-                  avatar4: "📚",
-                  avatar5: "🚀",
-                }[user?.avatar || ""] || "🧑‍💻"}
-              </div>
+
+              <Avatar avatar={user?.avatar || "avatar1"} />
 
               <div className="hidden text-left sm:block">
+
                 <p className="text-sm font-black">
                   {user?.username}
                 </p>
@@ -280,7 +407,9 @@ export default function SkillsPage() {
                 <p className="text-xs text-zinc-500">
                   View profile
                 </p>
+
               </div>
+
             </Link>
 
             <button
@@ -334,6 +463,7 @@ export default function SkillsPage() {
             </div>
 
             <div>
+
               <h2 className="text-2xl font-black">
                 Skills you can teach
               </h2>
@@ -342,6 +472,7 @@ export default function SkillsPage() {
                 Add skills you're confident enough to
                 teach another person.
               </p>
+
             </div>
 
           </div>
@@ -377,7 +508,7 @@ export default function SkillsPage() {
           </div>
 
 
-          <div className="mt-6 flex flex-wrap gap-3">
+          <div className="mt-6 space-y-3">
 
             {teachingSkills.length === 0 ? (
               <p className="text-sm text-zinc-400">
@@ -390,6 +521,9 @@ export default function SkillsPage() {
                   skill={skill}
                   onDelete={() =>
                     deleteSkill(skill.id)
+                  }
+                  onCertificate={() =>
+                    openCertificateModal(skill)
                   }
                 />
               ))
@@ -411,6 +545,7 @@ export default function SkillsPage() {
             </div>
 
             <div>
+
               <h2 className="text-2xl font-black">
                 Skills you want to learn
               </h2>
@@ -419,6 +554,7 @@ export default function SkillsPage() {
                 What would you like another person to
                 teach you?
               </p>
+
             </div>
 
           </div>
@@ -515,55 +651,300 @@ export default function SkillsPage() {
 
       </section>
 
+
+      {/* CERTIFICATE MODAL */}
+
+      {certificateSkill && (
+        <div className="fixed inset-0 z-[100] grid place-items-center bg-zinc-950/50 px-5 backdrop-blur-sm">
+
+          <div className="w-full max-w-lg rounded-[28px] border border-white/80 bg-white p-7 shadow-2xl">
+
+            <div className="flex items-start justify-between gap-4">
+
+              <div>
+
+                <p className="text-xs font-black tracking-widest text-violet-600">
+                  SKILL VERIFICATION
+                </p>
+
+                <h2 className="mt-2 text-2xl font-black">
+                  Add certificate
+                </h2>
+
+                <p className="mt-1 text-sm text-zinc-500">
+                  {certificateSkill.name}
+                </p>
+
+              </div>
+
+              <button
+                onClick={closeCertificateModal}
+                className="grid h-9 w-9 place-items-center rounded-xl bg-zinc-100 text-zinc-500 transition hover:bg-zinc-200"
+              >
+                <X size={18} />
+              </button>
+
+            </div>
+
+
+            <div className="mt-7 space-y-5">
+
+              {/* LINK */}
+
+              <div>
+
+                <label className="mb-2 flex items-center gap-2 text-sm font-bold">
+                  <LinkIcon size={16} />
+                  Certificate link
+                </label>
+
+                <input
+                  value={certificateLink}
+                  onChange={(e) => {
+                    setCertificateLink(e.target.value);
+                    if (e.target.value) {
+                      setCertificateFile(null);
+                    }
+                  }}
+                  placeholder="https://example.com/my-certificate"
+                  className="h-12 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 text-sm outline-none transition focus:border-violet-400 focus:ring-4 focus:ring-violet-200/40"
+                />
+
+              </div>
+
+
+              <div className="flex items-center gap-3">
+
+                <div className="h-px flex-1 bg-zinc-200" />
+
+                <span className="text-xs font-bold text-zinc-400">
+                  OR
+                </span>
+
+                <div className="h-px flex-1 bg-zinc-200" />
+
+              </div>
+
+
+              {/* FILE */}
+
+              <div>
+
+                <label className="mb-2 flex items-center gap-2 text-sm font-bold">
+                  <Upload size={16} />
+                  Upload certificate
+                </label>
+
+                <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-zinc-200 bg-zinc-50 px-5 py-8 text-center transition hover:border-violet-300 hover:bg-violet-50/50">
+
+                  <FileText
+                    size={28}
+                    className="text-violet-500"
+                  />
+
+                  <p className="mt-3 text-sm font-bold">
+                    {certificateFile
+                      ? certificateFile.name
+                      : "Choose certificate file"}
+                  </p>
+
+                  <p className="mt-1 text-xs text-zinc-400">
+                    JPG, PNG, WEBP or PDF • Max 2 MB
+                  </p>
+
+                  <input
+                    type="file"
+                    accept=".jpg,.jpeg,.png,.webp,.pdf,image/jpeg,image/png,image/webp,application/pdf"
+                    className="hidden"
+                    onChange={handleCertificateFile}
+                  />
+
+                </label>
+
+              </div>
+
+
+              {/* INFO */}
+
+              <div className="rounded-2xl bg-violet-50 p-4">
+
+                <p className="text-xs leading-5 text-violet-700">
+                  A certificate provides supporting evidence
+                  for your skill. It will not automatically mark
+                  the skill as verified. SkillSwap verification can
+                  still be completed through the verification quiz.
+                </p>
+
+              </div>
+
+            </div>
+
+
+            <div className="mt-7 flex gap-3">
+
+              <button
+                onClick={closeCertificateModal}
+                disabled={certificateSaving}
+                className="flex-1 rounded-xl border border-zinc-200 bg-white py-3 text-sm font-bold text-zinc-600 transition hover:bg-zinc-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+
+              <button
+                onClick={saveCertificate}
+                disabled={certificateSaving}
+                className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-violet-600 py-3 text-sm font-bold text-white shadow-lg shadow-violet-200 transition hover:bg-violet-700 disabled:opacity-50"
+              >
+                {certificateSaving ? (
+                  "Saving..."
+                ) : (
+                  <>
+                    <Check size={17} />
+                    Save Certificate
+                  </>
+                )}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+      )}
+
     </main>
   );
 }
 
 
+/* =========================================================
+   SKILL CARD
+   ========================================================= */
+
 function SkillCard({
   skill,
   onDelete,
+  onCertificate,
 }: {
   skill: Skill;
   onDelete: () => void;
+  onCertificate?: () => void;
 }) {
   return (
-    <div className="group flex items-center gap-3 rounded-2xl border border-white bg-white/65 px-4 py-3 shadow-sm backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-lg">
+    <div className="group flex flex-col gap-3 rounded-2xl border border-white bg-white/65 px-4 py-4 shadow-sm backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:bg-white/85 hover:shadow-lg sm:flex-row sm:items-center">
 
-      <div className="grid h-8 w-8 place-items-center rounded-lg bg-violet-100 text-violet-600">
+      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-100 text-violet-600">
         <Check size={16} />
       </div>
 
-      <div>
+      <div className="min-w-0 flex-1">
 
         <p className="text-sm font-bold">
           {skill.name}
         </p>
 
         {skill.type === "teach" && (
-          <p
-            className={
-              skill.verified
-                ? "text-xs font-semibold text-green-600"
-                : "text-xs text-zinc-400"
-            }
-          >
-            {skill.verified
-              ? "Verified"
-              : "Not verified yet"}
-          </p>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+
+            <p
+              className={
+                skill.verified
+                  ? "text-xs font-semibold text-green-600"
+                  : "text-xs text-zinc-400"
+              }
+            >
+              {skill.verified
+                ? "Verified"
+                : "Not verified yet"}
+            </p>
+
+            {skill.certificateUrl && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-green-50 px-2 py-1 text-[11px] font-bold text-green-600">
+                <Award size={11} />
+                Certificate added
+              </span>
+            )}
+
+          </div>
         )}
 
       </div>
 
+
+      {skill.type === "teach" && onCertificate && (
+        <button
+          onClick={onCertificate}
+          className="flex items-center justify-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-xs font-bold text-violet-700 transition hover:bg-violet-100"
+        >
+          {skill.certificateUrl ? (
+            <>
+              <FileText size={14} />
+              Edit Certificate
+            </>
+          ) : (
+            <>
+              <Upload size={14} />
+              Add Certificate
+            </>
+          )}
+        </button>
+      )}
+
+
+      {skill.certificateUrl && skill.type === "teach" && (
+        <a
+          href={skill.certificateUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-zinc-200 bg-white text-zinc-500 transition hover:bg-zinc-50 hover:text-violet-600"
+          title="View certificate"
+        >
+          <ExternalLink size={15} />
+        </a>
+      )}
+
+
       <button
         onClick={onDelete}
-        className="ml-2 rounded-lg p-2 text-zinc-300 opacity-0 transition hover:bg-red-50 hover:text-red-500 group-hover:opacity-100"
+        className="rounded-lg p-2 text-zinc-300 transition hover:bg-red-50 hover:text-red-500 sm:ml-1"
         title="Remove skill"
       >
         <Trash2 size={15} />
       </button>
 
+    </div>
+  );
+}
+
+
+/* =========================================================
+   AVATAR
+   ========================================================= */
+
+function Avatar({
+  avatar,
+  large = false,
+}: {
+  avatar: string;
+  large?: boolean;
+}) {
+  const avatars: Record<string, string> = {
+    avatar1: "🧑‍💻",
+    avatar2: "🎨",
+    avatar3: "🎮",
+    avatar4: "📚",
+    avatar5: "🚀",
+  };
+
+  return (
+    <div
+      className={`grid ${
+        large
+          ? "h-20 w-20 text-4xl"
+          : "h-10 w-10 text-lg"
+      } place-items-center rounded-full border border-white bg-white/70 shadow-inner backdrop-blur-xl`}
+    >
+      {avatars[avatar] || "🧑‍💻"}
     </div>
   );
 }
