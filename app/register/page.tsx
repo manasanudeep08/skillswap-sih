@@ -1,14 +1,30 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 
 const avatars = [
-  { id: "avatar1", emoji: "🧑‍💻" },
-  { id: "avatar2", emoji: "🎨" },
-  { id: "avatar3", emoji: "🎮" },
-  { id: "avatar4", emoji: "📚" },
-  { id: "avatar5", emoji: "🚀" },
+  {
+    id: "avatar1",
+    src: "/Avatars/Avatar 1.png",
+  },
+  {
+    id: "avatar2",
+    src: "/Avatars/Avatar 2.png",
+  },
+  {
+    id: "avatar3",
+    src: "/Avatars/Avatar 3.png",
+  },
+  {
+    id: "avatar4",
+    src: "/Avatars/Avatar 4.png",
+  },
+  {
+    id: "avatar5",
+    src: "/Avatars/Avatar 5.png",
+  },
 ];
 
 declare global {
@@ -28,6 +44,13 @@ declare global {
       failure?: (error: any) => void
     ) => void;
 
+    verifyOtp?: (
+      otp: string | number,
+      success?: (data: any) => void,
+      failure?: (error: any) => void,
+      reqId?: string
+    ) => void;
+
     retryOtp?: (
       channel: string | null,
       success?: (data: any) => void,
@@ -44,7 +67,14 @@ export default function RegisterPage() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [bio, setBio] = useState("");
+
+  // Default avatar
   const [avatar, setAvatar] = useState("avatar1");
+
+  // Custom uploaded avatar
+  const [customAvatar, setCustomAvatar] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [otp, setOtp] = useState("");
   const [otpSent, setOtpSent] = useState(false);
@@ -101,12 +131,16 @@ export default function RegisterPage() {
     const widgetToken = process.env.NEXT_PUBLIC_MSG91_WIDGET_TOKEN;
 
     if (!widgetId) {
-      console.error("MSG91: NEXT_PUBLIC_MSG91_WIDGET_ID is missing.");
+      console.error(
+        "MSG91: NEXT_PUBLIC_MSG91_WIDGET_ID is missing."
+      );
       return;
     }
 
     if (!widgetToken) {
-      console.error("MSG91: NEXT_PUBLIC_MSG91_WIDGET_TOKEN is missing.");
+      console.error(
+        "MSG91: NEXT_PUBLIC_MSG91_WIDGET_TOKEN is missing."
+      );
       return;
     }
 
@@ -132,16 +166,22 @@ export default function RegisterPage() {
 
       setMsg91Ready(true);
 
-      console.log("MSG91: widget initialized successfully.");
+      console.log(
+        "MSG91: widget initialized successfully."
+      );
     } catch (error) {
-      console.error("MSG91: widget initialization failed:", error);
+      console.error(
+        "MSG91: widget initialization failed:",
+        error
+      );
+
       setMsg91Ready(false);
     }
   }
 
   /*
    * ============================================================
-   * EXTRACT REQUEST ID
+   * REQUEST ID
    * ============================================================
    */
 
@@ -229,73 +269,220 @@ export default function RegisterPage() {
 
   /*
    * ============================================================
+   * ACCESS TOKEN
+   * ============================================================
+   */
+
+  function extractAccessToken(value: any): string {
+    if (value == null) {
+      return "";
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      if (!trimmed) {
+        return "";
+      }
+
+      try {
+        const parsed = JSON.parse(trimmed);
+        return extractAccessToken(parsed);
+      } catch {
+        if (trimmed.split(".").length === 3) {
+          return trimmed;
+        }
+
+        return "";
+      }
+    }
+
+    if (typeof value !== "object") {
+      return "";
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractAccessToken(item);
+
+        if (found) {
+          return found;
+        }
+      }
+
+      return "";
+    }
+
+    const tokenKeys = [
+      "accessToken",
+      "access_token",
+      "access-token",
+      "token",
+    ];
+
+    for (const key of tokenKeys) {
+      const candidate = value[key];
+
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+
+        if (
+          trimmed &&
+          trimmed.toLowerCase() !== "success" &&
+          trimmed.toLowerCase() !== "ok"
+        ) {
+          return trimmed;
+        }
+      }
+    }
+
+    for (const key of Object.keys(value)) {
+      const found = extractAccessToken(value[key]);
+
+      if (found) {
+        return found;
+      }
+    }
+
+    return "";
+  }
+
+  /*
+   * ============================================================
+   * CUSTOM AVATAR UPLOAD
+   * ============================================================
+   */
+
+  function handleAvatarUpload(
+    event: ChangeEvent<HTMLInputElement>
+  ) {
+    const file = event.target.files?.[0];
+
+    if (!file) {
+      return;
+    }
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please select an image file.");
+      return;
+    }
+
+    // 5 MB limit
+    if (file.size > 5 * 1024 * 1024) {
+      alert("Please choose an image smaller than 5 MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = reader.result;
+
+      if (typeof result !== "string") {
+        return;
+      }
+
+      setCustomAvatar(result);
+
+      // This is what gets sent to /api/register
+      setAvatar(result);
+    };
+
+    reader.onerror = () => {
+      alert("Unable to read that image. Please try another one.");
+    };
+
+    reader.readAsDataURL(file);
+  }
+
+  function selectDefaultAvatar(id: string) {
+    setCustomAvatar(null);
+    setAvatar(id);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  }
+
+  /*
+   * ============================================================
    * CREATE ACCOUNT
    * ============================================================
    */
 
-async function createAccount() {
-  setLoading(true);
+  async function createAccount(accessToken: string) {
+    setLoading(true);
 
-  try {
-    console.log("Creating account in DEMO OTP mode.");
-
-    const response = await fetch("/api/register", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name,
-        username,
-        email,
-        password,
-        bio,
-        avatar,
-        phone: `+91${phone}`,
-      }),
-    });
-
-    const data = await response.json();
-
-    console.log("REGISTER API RESPONSE:", data);
-
-    if (!response.ok) {
-      alert(
-        data?.error ||
-          "Something went wrong while creating your account."
+    try {
+      console.log(
+        "Sending MSG91 access token to server."
       );
 
-      return;
+      const response = await fetch("/api/register", {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+        },
+
+        body: JSON.stringify({
+          name,
+          username,
+          email,
+          password,
+          bio,
+
+          // Default avatar ID OR uploaded image data
+          avatar,
+
+          phone: `+91${phone}`,
+
+          msg91AccessToken: accessToken,
+        }),
+      });
+
+      const data = await response.json();
+
+      console.log(
+        "REGISTER API RESPONSE:",
+        data
+      );
+
+      if (!response.ok) {
+        alert(
+          data?.error ||
+            "Something went wrong while creating your account."
+        );
+
+        return;
+      }
+
+      setVerified(true);
+
+      /*
+       * IMPORTANT:
+       * No "Account created successfully" popup.
+       *
+       * Your existing login/session system needs to
+       * automatically log the user in here.
+       *
+       * For now we redirect to home.
+       */
+      window.location.href = "/";
+    } catch (error) {
+      console.error(
+        "Account creation error:",
+        error
+      );
+
+      alert(
+        "Unable to connect to the server."
+      );
+    } finally {
+      setLoading(false);
+      setOtpLoading(false);
     }
-
-    /*
-     * The register API has already:
-     *
-     * 1. Created the account
-     * 2. Created a session
-     * 3. Set the session cookie
-     *
-     * So the user is already logged in.
-     */
-
-    setVerified(true);
-
-    /*
-     * No success popup.
-     *
-     * Go directly to the home page.
-     */
-
-    window.location.href = "/";
-  } catch (error) {
-    console.error("Account creation error:", error);
-
-    alert("Unable to connect to the server.");
-  } finally {
-    setLoading(false);
-    setOtpLoading(false);
   }
-}
 
   /*
    * ============================================================
@@ -303,14 +490,19 @@ async function createAccount() {
    * ============================================================
    */
 
-  async function handleRegister(e: React.FormEvent) {
+  async function handleRegister(
+    e: React.FormEvent
+  ) {
     e.preventDefault();
 
     if (otpSent) {
       return;
     }
 
-    if (!msg91Ready || typeof window.sendOtp !== "function") {
+    if (
+      !msg91Ready ||
+      typeof window.sendOtp !== "function"
+    ) {
       alert(
         "OTP service is still loading. Please wait a moment and try again."
       );
@@ -318,17 +510,26 @@ async function createAccount() {
       return;
     }
 
-    const cleanPhone = phone.replace(/\D/g, "");
+    const cleanPhone = phone.replace(
+      /\D/g,
+      ""
+    );
 
     if (!/^\d{10}$/.test(cleanPhone)) {
-      alert("Enter a valid 10-digit Indian mobile number.");
+      alert(
+        "Enter a valid 10-digit Indian mobile number."
+      );
+
       return;
     }
 
     setOtpLoading(true);
     setReqId("");
 
-    console.log("MSG91: sending OTP to", `91${cleanPhone}`);
+    console.log(
+      "MSG91: sending OTP to",
+      `91${cleanPhone}`
+    );
 
     window.sendOtp(
       `91${cleanPhone}`,
@@ -337,11 +538,18 @@ async function createAccount() {
        * SUCCESS
        */
       (data) => {
-        console.log("MSG91 SEND OTP RESPONSE:", data);
+        console.log(
+          "MSG91 SEND OTP RESPONSE:",
+          data
+        );
 
-        const newReqId = extractReqId(data);
+        const newReqId =
+          extractReqId(data);
 
-        console.log("MSG91 REQUEST ID:", newReqId);
+        console.log(
+          "MSG91 REQUEST ID:",
+          newReqId
+        );
 
         if (!newReqId) {
           console.error(
@@ -369,7 +577,10 @@ async function createAccount() {
        * FAILURE
        */
       (error) => {
-        console.error("MSG91 SEND OTP ERROR:", error);
+        console.error(
+          "MSG91 SEND OTP ERROR:",
+          error
+        );
 
         setOtpLoading(false);
 
@@ -385,21 +596,26 @@ async function createAccount() {
 
   /*
    * ============================================================
-   * DEMO OTP VERIFICATION
+   * VERIFY OTP
    * ============================================================
-   *
-   * IMPORTANT:
-   *
-   * We DO NOT call window.verifyOtp().
-   *
-   * MSG91 still sends the real OTP to the user's phone.
-   * But for this demo, the OTP entered in the box is
-   * accepted without checking whether it matches.
    */
 
   function handleVerifyOtp() {
+    if (
+      typeof window.verifyOtp !== "function"
+    ) {
+      alert(
+        "OTP service is still loading. Please try again."
+      );
+
+      return;
+    }
+
     if (!otp || otp.length < 4) {
-      alert("Enter at least 4 digits.");
+      alert(
+        "Enter the OTP you received."
+      );
+
       return;
     }
 
@@ -411,26 +627,86 @@ async function createAccount() {
       return;
     }
 
-    if (otpLoading || loading) {
+    if (otpLoading) {
       return;
     }
 
     setOtpLoading(true);
 
-    console.log("DEMO OTP VERIFICATION:", {
-      reqId,
-      enteredOtpLength: otp.length,
-    });
+    console.log(
+      "MSG91 VERIFY OTP:",
+      {
+        reqId,
+        otpLength: otp.length,
+      }
+    );
 
-    /*
-     * Small delay so the UI still feels like
-     * a normal verification process.
-     */
-    setTimeout(() => {
-      console.log("DEMO OTP ACCEPTED.");
+    window.verifyOtp(
+      otp,
 
-      createAccount();
-    }, 500);
+      /*
+       * SUCCESS
+       */
+      async (data) => {
+        console.log(
+          "MSG91 VERIFY OTP RESPONSE:",
+          data
+        );
+
+        const accessToken =
+          extractAccessToken(data);
+
+        console.log(
+          "MSG91 ACCESS TOKEN RECEIVED:",
+          {
+            received: Boolean(accessToken),
+            length: accessToken.length,
+            looksLikeJWT:
+              accessToken.split(".").length === 3,
+          }
+        );
+
+        if (!accessToken) {
+          console.error(
+            "MSG91 returned no usable access token:",
+            data
+          );
+
+          setOtpLoading(false);
+
+          alert(
+            "OTP was verified, but MSG91 did not return an access token. Please try again."
+          );
+
+          return;
+        }
+
+        await createAccount(
+          accessToken
+        );
+      },
+
+      /*
+       * FAILURE
+       */
+      (error) => {
+        console.error(
+          "MSG91 VERIFY OTP ERROR:",
+          error
+        );
+
+        setOtpLoading(false);
+
+        const errorMessage =
+          error?.message ||
+          error?.error ||
+          "Invalid or expired OTP. Please try again.";
+
+        alert(errorMessage);
+      },
+
+      reqId
+    );
   }
 
   /*
@@ -440,14 +716,20 @@ async function createAccount() {
    */
 
   function handleResendOtp() {
-    if (typeof window.retryOtp !== "function") {
-      alert("OTP service is still loading.");
+    if (
+      typeof window.retryOtp !== "function"
+    ) {
+      alert(
+        "OTP service is still loading."
+      );
 
       return;
     }
 
     if (!reqId) {
-      alert("No OTP request found. Please send the OTP again.");
+      alert(
+        "No OTP request found. Please send the OTP again."
+      );
 
       return;
     }
@@ -458,10 +740,13 @@ async function createAccount() {
 
     setOtpLoading(true);
 
-    console.log("MSG91 RESEND OTP:", {
-      reqId,
-      channel: "11",
-    });
+    console.log(
+      "MSG91 RESEND OTP:",
+      {
+        reqId,
+        channel: "11",
+      }
+    );
 
     window.retryOtp(
       "11",
@@ -470,9 +755,13 @@ async function createAccount() {
        * SUCCESS
        */
       (data) => {
-        console.log("MSG91 RESEND OTP RESPONSE:", data);
+        console.log(
+          "MSG91 RESEND OTP RESPONSE:",
+          data
+        );
 
-        const newReqId = extractReqId(data);
+        const newReqId =
+          extractReqId(data);
 
         if (newReqId) {
           setReqId(newReqId);
@@ -481,23 +770,24 @@ async function createAccount() {
             "MSG91 NEW REQUEST ID:",
             newReqId
           );
-        } else {
-          console.warn(
-            "MSG91 resend did not return a new request ID. Keeping old request ID."
-          );
         }
 
         setOtp("");
         setOtpLoading(false);
 
-        alert("A new OTP has been sent.");
+        alert(
+          "A new OTP has been sent."
+        );
       },
 
       /*
        * FAILURE
        */
       (error) => {
-        console.error("MSG91 RESEND OTP ERROR:", error);
+        console.error(
+          "MSG91 RESEND OTP ERROR:",
+          error
+        );
 
         setOtpLoading(false);
 
@@ -538,21 +828,31 @@ async function createAccount() {
 
   return (
     <main className="min-h-screen bg-[#f7f7fb] text-zinc-950">
+      {/* Background */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-32 -top-32 h-80 w-80 rounded-full bg-violet-200/40 blur-3xl" />
+
         <div className="absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-indigo-200/30 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6 py-12">
         <div className="w-full max-w-md">
+
+          {/* Logo */}
           <Link
             href="/"
             className="mb-8 block text-center text-3xl font-black tracking-tight text-zinc-950"
           >
-            Skill<span className="text-violet-600">Swap</span>
+            Skill
+            <span className="text-violet-600">
+              Swap
+            </span>
           </Link>
 
+          {/* Card */}
           <div className="rounded-[28px] border border-zinc-200 bg-white p-8 shadow-[0_20px_70px_rgba(30,20,60,0.08)] sm:p-10">
+
+            {/* Heading */}
             <div className="mb-8">
               <div className="mb-4 inline-flex rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold tracking-wide text-violet-700">
                 JOIN SKILLSWAP
@@ -563,14 +863,16 @@ async function createAccount() {
               </h1>
 
               <p className="mt-3 text-[15px] leading-6 text-zinc-500">
-                Tell us a little about yourself before you start
-                swapping skills.
+                Tell us a little about yourself before you start swapping skills.
               </p>
             </div>
 
-            <form onSubmit={handleRegister} className="space-y-5">
-              {/* NAME */}
+            <form
+              onSubmit={handleRegister}
+              className="space-y-5"
+            >
 
+              {/* NAME */}
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Full name
@@ -579,7 +881,9 @@ async function createAccount() {
                 <input
                   type="text"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
+                  onChange={(e) =>
+                    setName(e.target.value)
+                  }
                   placeholder="Enter your name"
                   required
                   disabled={otpSent}
@@ -588,7 +892,6 @@ async function createAccount() {
               </div>
 
               {/* USERNAME */}
-
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Username
@@ -606,7 +909,10 @@ async function createAccount() {
                       setUsername(
                         e.target.value
                           .toLowerCase()
-                          .replace(/[^a-z0-9_]/g, "")
+                          .replace(
+                            /[^a-z0-9_]/g,
+                            ""
+                          )
                       )
                     }
                     placeholder="yourusername"
@@ -623,7 +929,6 @@ async function createAccount() {
               </div>
 
               {/* EMAIL */}
-
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Email address
@@ -632,7 +937,9 @@ async function createAccount() {
                 <input
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) =>
+                    setEmail(e.target.value)
+                  }
                   placeholder="you@example.com"
                   required
                   disabled={otpSent}
@@ -641,7 +948,6 @@ async function createAccount() {
               </div>
 
               {/* PHONE */}
-
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Phone number
@@ -671,14 +977,14 @@ async function createAccount() {
                 </div>
 
                 <p className="mt-1.5 text-xs text-zinc-400">
-                  We'll send a one-time password to your phone.
+                  We'll send a one-time password to verify your number.
                 </p>
               </div>
 
               {/* OTP */}
-
               {otpSent && !verified && (
                 <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+
                   <div className="mb-3">
                     <label className="block text-sm font-bold text-zinc-900">
                       Enter OTP
@@ -710,7 +1016,6 @@ async function createAccount() {
                     type="button"
                     disabled={
                       otpLoading ||
-                      loading ||
                       otp.length < 4
                     }
                     onClick={handleVerifyOtp}
@@ -722,6 +1027,7 @@ async function createAccount() {
                   </button>
 
                   <div className="mt-3 flex items-center justify-between text-sm">
+
                     <button
                       type="button"
                       onClick={handleResendOtp}
@@ -739,12 +1045,12 @@ async function createAccount() {
                     >
                       Change number
                     </button>
+
                   </div>
                 </div>
               )}
 
               {/* PASSWORD */}
-
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Password
@@ -753,7 +1059,9 @@ async function createAccount() {
                 <input
                   type="password"
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) =>
+                    setPassword(e.target.value)
+                  }
                   placeholder="Create a password"
                   required
                   minLength={6}
@@ -767,7 +1075,6 @@ async function createAccount() {
               </div>
 
               {/* BIO */}
-
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <label className="text-sm font-bold text-zinc-900">
@@ -781,7 +1088,9 @@ async function createAccount() {
 
                 <textarea
                   value={bio}
-                  onChange={(e) => setBio(e.target.value)}
+                  onChange={(e) =>
+                    setBio(e.target.value)
+                  }
                   placeholder="Tell people a little about yourself..."
                   maxLength={160}
                   rows={3}
@@ -794,30 +1103,142 @@ async function createAccount() {
                 </p>
               </div>
 
-              {/* AVATAR */}
+              {/* =================================================
+                  AVATAR
+                  ================================================= */}
 
               <div>
-                <label className="mb-3 block text-sm font-bold text-zinc-900">
-                  Choose your avatar
-                </label>
+
+                <div className="mb-3 flex items-center justify-between">
+
+                  <label className="text-sm font-bold text-zinc-900">
+                    Choose your avatar
+                  </label>
+
+                  {customAvatar && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        selectDefaultAvatar(
+                          "avatar1"
+                        )
+                      }
+                      disabled={otpSent}
+                      className="text-xs font-semibold text-violet-600 hover:underline disabled:opacity-50"
+                    >
+                      Use default
+                    </button>
+                  )}
+
+                </div>
+
+                {/* AVATAR GRID */}
 
                 <div className="grid grid-cols-5 gap-3">
-                  {avatars.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => setAvatar(item.id)}
-                      disabled={otpSent}
-                      className={`flex aspect-square items-center justify-center rounded-2xl border text-2xl transition ${
-                        avatar === item.id
-                          ? "border-violet-500 bg-violet-50 ring-4 ring-violet-500/10"
-                          : "border-zinc-200 bg-zinc-50 hover:border-violet-300 hover:bg-violet-50"
-                      } disabled:cursor-not-allowed disabled:opacity-60`}
-                    >
-                      {item.emoji}
-                    </button>
-                  ))}
+
+                  {avatars.map((item) => {
+                    const selected =
+                      avatar === item.id &&
+                      !customAvatar;
+
+                    return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() =>
+                          selectDefaultAvatar(
+                            item.id
+                          )
+                        }
+                        disabled={otpSent}
+                        className={`group relative aspect-square overflow-hidden rounded-2xl border-2 bg-violet-50 transition ${
+                          selected
+                            ? "border-violet-600 ring-4 ring-violet-500/15"
+                            : "border-zinc-200 hover:border-violet-400"
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+
+                        <Image
+                          src={item.src}
+                          alt={`Avatar ${item.id.replace(
+                            "avatar",
+                            ""
+                          )}`}
+                          fill
+                          sizes="100px"
+                          className="object-cover transition duration-200 group-hover:scale-105"
+                        />
+
+                        {selected && (
+                          <div className="absolute right-1.5 top-1.5 grid h-5 w-5 place-items-center rounded-full bg-violet-600 text-xs font-black text-white shadow">
+                            ✓
+                          </div>
+                        )}
+
+                      </button>
+                    );
+                  })}
+
                 </div>
+
+                {/* UPLOAD */}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp"
+                  onChange={handleAvatarUpload}
+                  className="hidden"
+                  disabled={otpSent}
+                />
+
+                <button
+                  type="button"
+                  disabled={otpSent}
+                  onClick={() =>
+                    fileInputRef.current?.click()
+                  }
+                  className={`mt-3 flex w-full items-center gap-4 rounded-2xl border-2 border-dashed p-3 text-left transition ${
+                    customAvatar
+                      ? "border-violet-600 bg-violet-50"
+                      : "border-zinc-200 bg-zinc-50 hover:border-violet-400 hover:bg-violet-50"
+                  } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+
+                  {/* Preview */}
+
+                  <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-xl border border-zinc-200 bg-white">
+
+                    {customAvatar ? (
+                      <img
+                        src={customAvatar}
+                        alt="Your uploaded avatar"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="grid h-full w-full place-items-center text-2xl text-zinc-400">
+                        +
+                      </div>
+                    )}
+
+                  </div>
+
+                  <div className="min-w-0">
+
+                    <p className="text-sm font-bold text-zinc-900">
+                      {customAvatar
+                        ? "Custom avatar selected"
+                        : "Upload your own photo"}
+                    </p>
+
+                    <p className="mt-0.5 text-xs text-zinc-500">
+                      PNG, JPG or WebP · Max 5 MB
+                    </p>
+
+                  </div>
+
+                </button>
+
               </div>
 
               {/* CREATE ACCOUNT */}
@@ -832,22 +1253,29 @@ async function createAccount() {
                   }
                   className="group flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 font-bold text-white shadow-lg shadow-violet-600/20 transition hover:bg-violet-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
+
                   {otpLoading
                     ? "Sending OTP..."
                     : !msg91Ready
                       ? "Loading OTP service..."
                       : "Create Account"}
 
-                  {!otpLoading && msg91Ready && (
-                    <span className="ml-2 text-lg transition-transform group-hover:translate-x-1">
-                      →
-                    </span>
-                  )}
+                  {!otpLoading &&
+                    msg91Ready && (
+                      <span className="ml-2 text-lg transition-transform group-hover:translate-x-1">
+                        →
+                      </span>
+                    )}
+
                 </button>
               )}
+
             </form>
 
+            {/* LOGIN */}
+
             <div className="my-7 flex items-center gap-4">
+
               <div className="h-px flex-1 bg-zinc-200" />
 
               <span className="text-xs font-semibold text-zinc-400">
@@ -855,22 +1283,28 @@ async function createAccount() {
               </span>
 
               <div className="h-px flex-1 bg-zinc-200" />
+
             </div>
 
             <p className="text-center text-sm text-zinc-500">
+
               Already have an account?{" "}
+
               <Link
                 href="/login"
                 className="font-bold text-violet-600 hover:text-violet-700 hover:underline"
               >
                 Log in
               </Link>
+
             </p>
+
           </div>
 
           <p className="mt-6 text-center text-xs font-medium text-zinc-400">
             Learn what you know. Discover what you don't.
           </p>
+
         </div>
       </div>
     </main>
