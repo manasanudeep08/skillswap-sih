@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 const avatars = [
   { id: "avatar1", emoji: "🧑‍💻" },
@@ -11,17 +11,101 @@ const avatars = [
   { id: "avatar5", emoji: "🚀" },
 ];
 
+declare global {
+  interface Window {
+    initSendOTP?: (configuration: {
+      widgetId: string;
+      tokenAuth: string;
+      identifier?: string;
+      exposeMethods: boolean;
+      success?: (data: unknown) => void;
+      failure?: (error: unknown) => void;
+    }) => void;
+
+    sendOtp?: (
+      identifier: string,
+      success?: (data: any) => void,
+      failure?: (error: any) => void
+    ) => void;
+
+    verifyOtp?: (
+      otp: string | number,
+      success?: (data: any) => void,
+      failure?: (error: any) => void,
+      reqId?: string
+    ) => void;
+
+    retryOtp?: (
+      channel: string | null,
+      success?: (data: any) => void,
+      failure?: (error: any) => void,
+      reqId?: string
+    ) => void;
+  }
+}
+
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [bio, setBio] = useState("");
   const [avatar, setAvatar] = useState("avatar1");
-  const [loading, setLoading] = useState(false);
 
-  async function handleRegister(e: React.FormEvent) {
-    e.preventDefault();
+  const [otp, setOtp] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [verified, setVerified] = useState(false);
+  const [reqId, setReqId] = useState("");
+
+  const [loading, setLoading] = useState(false);
+  const [msg91Ready, setMsg91Ready] = useState(false);
+
+  useEffect(() => {
+    const script = document.createElement("script");
+
+    script.src = "https://verify.msg91.com/otp-provider.js";
+    script.async = true;
+
+    script.onload = () => {
+      if (
+        typeof window.initSendOTP === "function" &&
+        process.env.NEXT_PUBLIC_MSG91_WIDGET_ID &&
+        process.env.NEXT_PUBLIC_MSG91_WIDGET_TOKEN
+      ) {
+        window.initSendOTP({
+          widgetId: process.env.NEXT_PUBLIC_MSG91_WIDGET_ID,
+          tokenAuth: process.env.NEXT_PUBLIC_MSG91_WIDGET_TOKEN,
+          exposeMethods: true,
+
+          success: (data) => {
+            console.log("MSG91 success:", data);
+          },
+
+          failure: (error) => {
+            console.error("MSG91 failure:", error);
+          },
+        });
+
+        setMsg91Ready(true);
+      } else {
+        console.error("MSG91 widget configuration is missing.");
+      }
+    };
+
+    script.onerror = () => {
+      console.error("Unable to load MSG91 OTP script.");
+    };
+
+    document.head.appendChild(script);
+
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
+  async function createAccount(accessToken: string) {
     setLoading(true);
 
     try {
@@ -37,38 +121,212 @@ export default function RegisterPage() {
           password,
           bio,
           avatar,
+          phone: `+91${phone}`,
+          msg91AccessToken: accessToken,
         }),
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        alert(data.error);
+        alert(data.error || "Something went wrong while creating your account.");
         return;
       }
 
-      // Registration successful
-      // No success popup. Go directly to home.
+      setVerified(true);
+
       window.location.href = "/";
-    } catch {
+    } catch (error) {
+      console.error("Account creation error:", error);
       alert("Unable to connect to the server.");
     } finally {
       setLoading(false);
+      setOtpLoading(false);
     }
+  }
+
+  async function handleRegister(e: React.FormEvent) {
+    e.preventDefault();
+
+    if (otpSent) {
+      return;
+    }
+
+    if (!msg91Ready || !window.sendOtp) {
+      alert("OTP service is still loading. Please wait a moment and try again.");
+      return;
+    }
+
+    const cleanPhone = phone.replace(/\D/g, "");
+
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      alert("Enter a valid 10-digit Indian mobile number.");
+      return;
+    }
+
+    setOtpLoading(true);
+
+    window.sendOtp(
+      `91${cleanPhone}`,
+
+      (data) => {
+        console.log("OTP sent:", data);
+
+        const responseReqId =
+          data?.reqId ||
+          data?.reqID ||
+          data?.data?.reqId ||
+          data?.data?.reqID ||
+          "";
+
+        if (!responseReqId) {
+          console.warn("MSG91 did not return a reqId:", data);
+        }
+
+        setReqId(responseReqId);
+        setOtpSent(true);
+        setOtpLoading(false);
+      },
+
+      (error) => {
+        console.error("OTP sending failed:", error);
+
+        alert(
+          error?.message ||
+            error?.error ||
+            "Could not send OTP. Please check your phone number and try again."
+        );
+
+        setOtpLoading(false);
+      }
+    );
+  }
+
+  function handleVerifyOtp() {
+    if (!window.verifyOtp) {
+      alert("OTP service is still loading. Please try again.");
+      return;
+    }
+
+    if (!otp || otp.length < 4) {
+      alert("Enter the OTP you received.");
+      return;
+    }
+
+    if (!reqId) {
+      alert("The OTP request ID is missing. Please send the OTP again.");
+      return;
+    }
+
+    setOtpLoading(true);
+
+    window.verifyOtp(
+      otp,
+
+      async (data) => {
+        console.log("OTP verification response:", data);
+
+        /*
+         * MSG91's access token can be returned in different response shapes.
+         * We check the common ones.
+         */
+        const accessToken =
+          data?.accessToken ||
+          data?.access_token ||
+          data?.["access-token"] ||
+          data?.token ||
+          data?.message ||
+          data?.data?.accessToken ||
+          data?.data?.access_token ||
+          data?.data?.["access-token"] ||
+          data?.data?.token ||
+          data?.data?.message;
+
+        if (!accessToken || typeof accessToken !== "string") {
+          console.error("No MSG91 access token found:", data);
+
+          alert(
+            "OTP was verified, but MSG91 did not return an access token."
+          );
+
+          setOtpLoading(false);
+          return;
+        }
+
+        await createAccount(accessToken);
+      },
+
+      (error) => {
+        console.error("OTP verification failed:", error);
+
+        alert(
+          error?.message ||
+            error?.error ||
+            "Invalid or expired OTP. Please try again."
+        );
+
+        setOtpLoading(false);
+      },
+
+      reqId
+    );
+  }
+
+  function handleResendOtp() {
+    if (!window.retryOtp) {
+      alert("OTP service is still loading.");
+      return;
+    }
+
+    if (!reqId) {
+      alert("No OTP request found. Please enter your phone number again.");
+      return;
+    }
+
+    setOtpLoading(true);
+
+    window.retryOtp(
+      "11",
+
+      (data) => {
+        console.log("OTP resent:", data);
+        alert("A new OTP has been sent.");
+        setOtp("");
+        setOtpLoading(false);
+      },
+
+      (error) => {
+        console.error("OTP resend failed:", error);
+
+        alert(
+          error?.message ||
+            error?.error ||
+            "Unable to resend OTP. Please try again."
+        );
+
+        setOtpLoading(false);
+      },
+
+      reqId
+    );
+  }
+
+  function changePhoneNumber() {
+    setOtpSent(false);
+    setOtp("");
+    setReqId("");
+    setVerified(false);
   }
 
   return (
     <main className="min-h-screen bg-[#f7f7fb] text-zinc-950">
-
       <div className="pointer-events-none fixed inset-0 overflow-hidden">
         <div className="absolute -left-32 -top-32 h-80 w-80 rounded-full bg-violet-200/40 blur-3xl" />
         <div className="absolute -bottom-40 -right-32 h-96 w-96 rounded-full bg-indigo-200/30 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-6xl items-center justify-center px-6 py-12">
-
         <div className="w-full max-w-md">
-
           <Link
             href="/"
             className="mb-8 block text-center text-3xl font-black tracking-tight text-zinc-950"
@@ -77,7 +335,6 @@ export default function RegisterPage() {
           </Link>
 
           <div className="rounded-[28px] border border-zinc-200 bg-white p-8 shadow-[0_20px_70px_rgba(30,20,60,0.08)] sm:p-10">
-
             <div className="mb-8">
               <div className="mb-4 inline-flex rounded-full bg-violet-50 px-3 py-1.5 text-xs font-bold tracking-wide text-violet-700">
                 JOIN SKILLSWAP
@@ -88,12 +345,12 @@ export default function RegisterPage() {
               </h1>
 
               <p className="mt-3 text-[15px] leading-6 text-zinc-500">
-                Tell us a little about yourself before you start swapping skills.
+                Tell us a little about yourself before you start swapping
+                skills.
               </p>
             </div>
 
             <form onSubmit={handleRegister} className="space-y-5">
-
               {/* Name */}
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
@@ -106,7 +363,8 @@ export default function RegisterPage() {
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Enter your name"
                   required
-                  className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                  disabled={otpSent}
+                  className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:bg-zinc-100"
                 />
               </div>
 
@@ -130,7 +388,8 @@ export default function RegisterPage() {
                     placeholder="yourusername"
                     required
                     minLength={3}
-                    className="h-12 w-full rounded-xl border border-zinc-300 bg-white pl-9 pr-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                    disabled={otpSent}
+                    className="h-12 w-full rounded-xl border border-zinc-300 bg-white pl-9 pr-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:bg-zinc-100"
                   />
                 </div>
 
@@ -151,9 +410,101 @@ export default function RegisterPage() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@example.com"
                   required
-                  className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                  disabled={otpSent}
+                  className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:bg-zinc-100"
                 />
               </div>
+
+              {/* Phone */}
+              <div>
+                <label className="mb-2 block text-sm font-bold text-zinc-900">
+                  Phone number
+                </label>
+
+                <div className="flex gap-2">
+                  <div className="flex h-12 items-center rounded-xl border border-zinc-300 bg-zinc-50 px-4 text-sm font-bold text-zinc-600">
+                    +91
+                  </div>
+
+                  <input
+                    type="tel"
+                    inputMode="numeric"
+                    value={phone}
+                    onChange={(e) =>
+                      setPhone(
+                        e.target.value.replace(/\D/g, "").slice(0, 10)
+                      )
+                    }
+                    placeholder="9876543210"
+                    required
+                    disabled={otpSent}
+                    className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:bg-zinc-100"
+                  />
+                </div>
+
+                <p className="mt-1.5 text-xs text-zinc-400">
+                  We'll send a one-time password to verify your number.
+                </p>
+              </div>
+
+              {/* OTP */}
+              {otpSent && !verified && (
+                <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
+                  <div className="mb-3">
+                    <label className="block text-sm font-bold text-zinc-900">
+                      Enter OTP
+                    </label>
+
+                    <p className="mt-1 text-xs text-zinc-500">
+                      We sent a verification code to +91 {phone}
+                    </p>
+                  </div>
+
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={8}
+                    value={otp}
+                    onChange={(e) =>
+                      setOtp(
+                        e.target.value.replace(/\D/g, "").slice(0, 8)
+                      )
+                    }
+                    placeholder="Enter OTP"
+                    className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-center text-xl font-bold tracking-[0.4em] text-zinc-950 outline-none focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                  />
+
+                  <button
+                    type="button"
+                    disabled={otpLoading || otp.length < 4}
+                    onClick={handleVerifyOtp}
+                    className="mt-3 h-11 w-full rounded-xl bg-violet-600 font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {otpLoading ? "Verifying..." : "Verify OTP"}
+                  </button>
+
+                  <div className="mt-3 flex items-center justify-between text-sm">
+                    <button
+                      type="button"
+                      onClick={handleResendOtp}
+                      disabled={otpLoading}
+                      className="font-semibold text-violet-600 hover:underline disabled:opacity-50"
+                    >
+                      Resend OTP
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={changePhoneNumber}
+                      disabled={otpLoading}
+                      className="font-semibold text-zinc-500 hover:text-zinc-800 disabled:opacity-50"
+                    >
+                      Change number
+                    </button>
+                  </div>
+                </div>
+              )}
 
               {/* Password */}
               <div>
@@ -168,7 +519,8 @@ export default function RegisterPage() {
                   placeholder="Create a password"
                   required
                   minLength={6}
-                  className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                  disabled={otpSent}
+                  className="h-12 w-full rounded-xl border border-zinc-300 bg-white px-4 text-[16px] font-semibold text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:bg-zinc-100"
                 />
 
                 <p className="mt-1.5 text-xs text-zinc-400">
@@ -194,7 +546,8 @@ export default function RegisterPage() {
                   placeholder="Tell people a little about yourself..."
                   maxLength={160}
                   rows={3}
-                  className="w-full resize-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-[16px] font-medium text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10"
+                  disabled={otpSent}
+                  className="w-full resize-none rounded-xl border border-zinc-300 bg-white px-4 py-3 text-[16px] font-medium text-zinc-950 outline-none transition placeholder:text-[15px] placeholder:font-normal placeholder:text-zinc-400 focus:border-violet-500 focus:ring-4 focus:ring-violet-500/10 disabled:bg-zinc-100"
                 />
 
                 <p className="mt-1 text-right text-xs text-zinc-400">
@@ -214,11 +567,12 @@ export default function RegisterPage() {
                       key={item.id}
                       type="button"
                       onClick={() => setAvatar(item.id)}
+                      disabled={otpSent}
                       className={`flex aspect-square items-center justify-center rounded-2xl border text-2xl transition ${
                         avatar === item.id
                           ? "border-violet-500 bg-violet-50 ring-4 ring-violet-500/10"
                           : "border-zinc-200 bg-zinc-50 hover:border-violet-300 hover:bg-violet-50"
-                      }`}
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       {item.emoji}
                     </button>
@@ -226,29 +580,32 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Submit */}
-              <button
-                type="submit"
-                disabled={loading}
-                className="group flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 font-bold text-white shadow-lg shadow-violet-600/20 transition hover:bg-violet-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {loading ? "Creating account..." : "Create Account"}
+              {/* Main button */}
+              {!otpSent && (
+                <button
+                  type="submit"
+                  disabled={otpLoading || loading || !msg91Ready}
+                  className="group flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 font-bold text-white shadow-lg shadow-violet-600/20 transition hover:bg-violet-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {otpLoading
+                    ? "Sending OTP..."
+                    : !msg91Ready
+                      ? "Loading OTP service..."
+                      : "Create Account"}
 
-                {!loading && (
-                  <span className="ml-2 text-lg transition-transform group-hover:translate-x-1">
-                    →
-                  </span>
-                )}
-              </button>
-
+                  {!otpLoading && msg91Ready && (
+                    <span className="ml-2 text-lg transition-transform group-hover:translate-x-1">
+                      →
+                    </span>
+                  )}
+                </button>
+              )}
             </form>
 
             <div className="my-7 flex items-center gap-4">
               <div className="h-px flex-1 bg-zinc-200" />
 
-              <span className="text-xs font-semibold text-zinc-400">
-                OR
-              </span>
+              <span className="text-xs font-semibold text-zinc-400">OR</span>
 
               <div className="h-px flex-1 bg-zinc-200" />
             </div>
@@ -262,13 +619,11 @@ export default function RegisterPage() {
                 Log in
               </Link>
             </p>
-
           </div>
 
           <p className="mt-6 text-center text-xs font-medium text-zinc-400">
             Learn what you know. Discover what you don't.
           </p>
-
         </div>
       </div>
     </main>

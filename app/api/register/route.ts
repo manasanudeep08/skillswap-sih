@@ -2,6 +2,72 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { hash } from "bcryptjs";
 
+async function verifyMSG91AccessToken(accessToken: string) {
+  const authKey = process.env.MSG91_AUTH_KEY;
+
+  if (!authKey) {
+    console.error("MSG91_AUTH_KEY is missing.");
+    throw new Error("MSG91_AUTH_KEY is not configured.");
+  }
+
+  const response = await fetch(
+    "https://control.msg91.com/api/v5/widget/verifyAccessToken",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        authkey: authKey,
+        "access-token": accessToken,
+      }),
+      cache: "no-store",
+    }
+  );
+
+  const data = await response.json();
+
+  console.log("MSG91 access token verification:", data);
+
+  if (!response.ok) {
+    return {
+      verified: false,
+      data,
+    };
+  }
+
+  /*
+   * MSG91's exact response shape can vary.
+   * Treat a successful HTTP response as verified unless
+   * the response explicitly reports failure.
+   */
+  const status = String(
+    data?.type ||
+      data?.status ||
+      data?.data?.type ||
+      data?.data?.status ||
+      ""
+  ).toLowerCase();
+
+  if (
+    status === "error" ||
+    status === "failed" ||
+    status === "failure" ||
+    data?.success === false ||
+    data?.data?.success === false
+  ) {
+    return {
+      verified: false,
+      data,
+    };
+  }
+
+  return {
+    verified: true,
+    data,
+  };
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -9,20 +75,36 @@ export async function POST(request: Request) {
     const name = body.name?.trim();
     const username = body.username?.trim().toLowerCase();
     const email = body.email?.trim().toLowerCase();
+    const phone = body.phone?.trim();
     const password = body.password;
     const bio = body.bio?.trim() || null;
     const avatar = body.avatar || "avatar1";
+    const msg91AccessToken = body.msg91AccessToken;
 
-    if (!name || !username || !email || !password) {
+    if (!name || !username || !email || !password || !phone) {
       return NextResponse.json(
-        { error: "Name, username, email and password are required." },
+        {
+          error:
+            "Name, username, email, phone and password are required.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!msg91AccessToken) {
+      return NextResponse.json(
+        {
+          error: "Please verify your phone number first.",
+        },
         { status: 400 }
       );
     }
 
     if (username.length < 3) {
       return NextResponse.json(
-        { error: "Username must be at least 3 characters." },
+        {
+          error: "Username must be at least 3 characters.",
+        },
         { status: 400 }
       );
     }
@@ -39,29 +121,89 @@ export async function POST(request: Request) {
 
     if (password.length < 6) {
       return NextResponse.json(
-        { error: "Password must be at least 6 characters." },
+        {
+          error: "Password must be at least 6 characters.",
+        },
         { status: 400 }
       );
     }
 
+    if (!/^\+91\d{10}$/.test(phone)) {
+      return NextResponse.json(
+        {
+          error: "Please provide a valid Indian phone number.",
+        },
+        { status: 400 }
+      );
+    }
+
+    /*
+     * Verify the OTP result with MSG91 BEFORE creating
+     * anything in our database.
+     */
+    const msg91Verification = await verifyMSG91AccessToken(
+      msg91AccessToken
+    );
+
+    if (!msg91Verification.verified) {
+      return NextResponse.json(
+        {
+          error: "Phone verification failed. Please verify your OTP again.",
+        },
+        { status: 401 }
+      );
+    }
+
+    /*
+     * Check whether email already exists.
+     */
     const existingEmail = await prisma.user.findUnique({
-      where: { email },
+      where: {
+        email,
+      },
     });
 
     if (existingEmail) {
       return NextResponse.json(
-        { error: "An account with this email already exists." },
+        {
+          error: "An account with this email already exists.",
+        },
         { status: 409 }
       );
     }
 
+    /*
+     * Check whether username already exists.
+     */
     const existingUsername = await prisma.user.findUnique({
-      where: { username },
+      where: {
+        username,
+      },
     });
 
     if (existingUsername) {
       return NextResponse.json(
-        { error: "That username is already taken." },
+        {
+          error: "That username is already taken.",
+        },
+        { status: 409 }
+      );
+    }
+
+    /*
+     * Check whether phone already exists.
+     */
+    const existingPhone = await prisma.user.findFirst({
+      where: {
+        phone,
+      },
+    });
+
+    if (existingPhone) {
+      return NextResponse.json(
+        {
+          error: "An account with this phone number already exists.",
+        },
         { status: 409 }
       );
     }
@@ -76,6 +218,7 @@ export async function POST(request: Request) {
         password: hashedPassword,
         bio,
         avatar,
+        phone,
       },
     });
 
@@ -87,6 +230,7 @@ export async function POST(request: Request) {
           name: user.name,
           username: user.username,
           email: user.email,
+          phone: user.phone,
           bio: user.bio,
           avatar: user.avatar,
         },
@@ -97,7 +241,9 @@ export async function POST(request: Request) {
     console.error("Registration error:", error);
 
     return NextResponse.json(
-      { error: "Something went wrong while creating your account." },
+      {
+        error: "Something went wrong while creating your account.",
+      },
       { status: 500 }
     );
   }
