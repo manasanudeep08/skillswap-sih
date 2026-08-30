@@ -2,45 +2,30 @@ import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { hash } from "bcryptjs";
 
-/*
- * ============================================================
- * MSG91 ACCESS TOKEN VERIFICATION
- * ============================================================
- *
- * MSG91 expects:
- *
- * POST
- * https://control.msg91.com/api/v5/widget/verifyAccessToken
- *
- * with:
- *
- * authkey
- * access-token
- *
- * as form-urlencoded parameters.
- */
-
 async function verifyMSG91AccessToken(accessToken: string) {
   const authKey = process.env.MSG91_AUTH_KEY;
 
   if (!authKey) {
-    console.error("MSG91_AUTH_KEY is missing.");
+    console.error("❌ MSG91_AUTH_KEY is missing");
 
-    throw new Error(
-      "MSG91_AUTH_KEY is not configured."
-    );
+    throw new Error("MSG91_AUTH_KEY is not configured");
   }
 
-  if (!accessToken) {
-    return {
-      verified: false,
-      data: {
-        error: "No MSG91 access token provided.",
-      },
-    };
-  }
+  console.log("========================================");
+  console.log("MSG91 ACCESS TOKEN VERIFICATION");
+  console.log("========================================");
 
-  console.log("MSG91: verifying access token on server.");
+  console.log("Token received:", Boolean(accessToken));
+  console.log("Token length:", accessToken?.length || 0);
+  console.log(
+    "Looks like JWT:",
+    accessToken?.split(".").length === 3
+  );
+
+  /*
+   * IMPORTANT:
+   * Never print the actual access token.
+   */
 
   const response = await fetch(
     "https://control.msg91.com/api/v5/widget/verifyAccessToken",
@@ -61,30 +46,50 @@ async function verifyMSG91AccessToken(accessToken: string) {
     }
   );
 
+  const responseText = await response.text();
+
+  console.log(
+    "MSG91 verification HTTP status:",
+    response.status
+  );
+
+  console.log(
+    "MSG91 verification raw response:",
+    responseText
+  );
+
   let data: any;
 
   try {
-    data = await response.json();
+    data = JSON.parse(responseText);
   } catch {
     data = {
-      error: "MSG91 returned a non-JSON response.",
+      raw: responseText,
     };
   }
 
   console.log(
-    "MSG91 ACCESS TOKEN VERIFICATION RESPONSE:",
+    "MSG91 verification parsed response:",
     data
   );
 
+  /*
+   * MSG91 itself rejected the token.
+   */
   if (!response.ok) {
+    console.error(
+      "❌ MSG91 REJECTED ACCESS TOKEN"
+    );
+
     return {
       verified: false,
       data,
+      httpStatus: response.status,
     };
   }
 
   /*
-   * Look for explicit failure states.
+   * Explicit failure response.
    */
   const status = String(
     data?.type ??
@@ -101,37 +106,36 @@ async function verifyMSG91AccessToken(accessToken: string) {
     data?.success === false ||
     data?.data?.success === false
   ) {
+    console.error(
+      "❌ MSG91 RESPONSE SAYS VERIFICATION FAILED"
+    );
+
     return {
       verified: false,
       data,
+      httpStatus: response.status,
     };
   }
 
-  /*
-   * A successful HTTP response without an explicit failure
-   * is considered a successful token verification.
-   */
+  console.log(
+    "✅ MSG91 ACCESS TOKEN ACCEPTED"
+  );
+
   return {
     verified: true,
     data,
+    httpStatus: response.status,
   };
 }
 
-/*
- * ============================================================
- * POST /api/register
- * ============================================================
- */
-
 export async function POST(request: Request) {
   try {
-    const body = await request.json();
+    console.log("");
+    console.log("========================================");
+    console.log("REGISTRATION REQUEST");
+    console.log("========================================");
 
-    /*
-     * ========================================================
-     * GET INPUT
-     * ========================================================
-     */
+    const body = await request.json();
 
     const name =
       typeof body.name === "string"
@@ -174,10 +178,24 @@ export async function POST(request: Request) {
         ? body.msg91AccessToken.trim()
         : "";
 
+    console.log("Registration data:");
+    console.log("Name:", name);
+    console.log("Username:", username);
+    console.log("Email:", email);
+    console.log("Phone:", phone);
+    console.log(
+      "MSG91 token received:",
+      Boolean(msg91AccessToken)
+    );
+    console.log(
+      "MSG91 token length:",
+      msg91AccessToken.length
+    );
+
     /*
-     * ========================================================
-     * BASIC VALIDATION
-     * ========================================================
+     * ========================================
+     * REQUIRED FIELDS
+     * ========================================
      */
 
     if (
@@ -192,39 +210,43 @@ export async function POST(request: Request) {
           error:
             "Name, username, email, phone and password are required.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * OTP verification is mandatory.
+     * ========================================
+     * MSG91 TOKEN REQUIRED
+     * ========================================
      */
+
     if (!msg91AccessToken) {
+      console.error(
+        "❌ No MSG91 access token received"
+      );
+
       return NextResponse.json(
         {
           error:
             "Please verify your phone number first.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * Username validation.
+     * ========================================
+     * USERNAME
+     * ========================================
      */
+
     if (username.length < 3) {
       return NextResponse.json(
         {
           error:
             "Username must be at least 3 characters.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
@@ -234,83 +256,85 @@ export async function POST(request: Request) {
           error:
             "Username can only contain lowercase letters, numbers and underscores.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * Password validation.
+     * ========================================
+     * PASSWORD
+     * ========================================
      */
+
     if (password.length < 6) {
       return NextResponse.json(
         {
           error:
             "Password must be at least 6 characters.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * Phone validation.
-     *
-     * Client sends:
-     *
-     * +919701254151
-     *
+     * ========================================
+     * PHONE
+     * ========================================
      */
+
     if (!/^\+91\d{10}$/.test(phone)) {
       return NextResponse.json(
         {
           error:
             "Please provide a valid Indian phone number.",
         },
-        {
-          status: 400,
-        }
+        { status: 400 }
       );
     }
 
     /*
-     * ========================================================
-     * VERIFY MSG91 BEFORE DATABASE CREATION
-     * ========================================================
+     * ========================================
+     * VERIFY MSG91
+     * ========================================
      */
 
-    const msg91Verification =
+    console.log(
+      "🔐 Verifying MSG91 access token..."
+    );
+
+    const verification =
       await verifyMSG91AccessToken(
         msg91AccessToken
       );
 
-    if (!msg91Verification.verified) {
+    if (!verification.verified) {
       console.error(
-        "MSG91 access token verification failed:",
-        msg91Verification.data
+        "❌ PHONE VERIFICATION FAILED"
+      );
+
+      console.error(
+        "MSG91 response:",
+        verification.data
       );
 
       return NextResponse.json(
         {
           error:
             "Phone verification failed. Please verify your OTP again.",
+          msg91: verification.data,
         },
-        {
-          status: 401,
-        }
+        { status: 401 }
       );
     }
 
     console.log(
-      "MSG91: phone verification successful."
+      "✅ PHONE VERIFICATION SUCCESSFUL"
     );
 
     /*
-     * ========================================================
+     * ========================================
      * CHECK EMAIL
-     * ========================================================
+     * ========================================
      */
 
     const existingEmail =
@@ -326,16 +350,14 @@ export async function POST(request: Request) {
           error:
             "An account with this email already exists.",
         },
-        {
-          status: 409,
-        }
+        { status: 409 }
       );
     }
 
     /*
-     * ========================================================
+     * ========================================
      * CHECK USERNAME
-     * ========================================================
+     * ========================================
      */
 
     const existingUsername =
@@ -351,16 +373,14 @@ export async function POST(request: Request) {
           error:
             "That username is already taken.",
         },
-        {
-          status: 409,
-        }
+        { status: 409 }
       );
     }
 
     /*
-     * ========================================================
+     * ========================================
      * CHECK PHONE
-     * ========================================================
+     * ========================================
      */
 
     const existingPhone =
@@ -376,27 +396,23 @@ export async function POST(request: Request) {
           error:
             "An account with this phone number already exists.",
         },
-        {
-          status: 409,
-        }
+        { status: 409 }
       );
     }
 
     /*
-     * ========================================================
+     * ========================================
      * HASH PASSWORD
-     * ========================================================
+     * ========================================
      */
 
-    const hashedPassword = await hash(
-      password,
-      12
-    );
+    const hashedPassword =
+      await hash(password, 12);
 
     /*
-     * ========================================================
+     * ========================================
      * CREATE USER
-     * ========================================================
+     * ========================================
      */
 
     const user =
@@ -412,10 +428,15 @@ export async function POST(request: Request) {
         },
       });
 
+    console.log(
+      "✅ USER CREATED:",
+      user.id
+    );
+
     /*
-     * ========================================================
+     * ========================================
      * SUCCESS
-     * ========================================================
+     * ========================================
      */
 
     return NextResponse.json(
@@ -433,13 +454,11 @@ export async function POST(request: Request) {
           avatar: user.avatar,
         },
       },
-      {
-        status: 201,
-      }
+      { status: 201 }
     );
   } catch (error) {
     console.error(
-      "Registration error:",
+      "❌ REGISTRATION ERROR:",
       error
     );
 
@@ -448,9 +467,7 @@ export async function POST(request: Request) {
         error:
           "Something went wrong while creating your account.",
       },
-      {
-        status: 500,
-      }
+      { status: 500 }
     );
   }
 }
