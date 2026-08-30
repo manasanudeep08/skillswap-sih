@@ -171,15 +171,19 @@ export default function RegisterPage() {
 
     const keys = Object.keys(value);
 
-    for (const key of keys) {
-      if (["reqid", "requestid"].includes(key.toLowerCase())) {
-        const candidate = value[key];
-        if (candidate !== null && candidate !== undefined) {
-          const result = String(candidate).trim();
-          if (result) return result;
-        }
-      }
+for (const key of keys) {
+  if (
+    ["reqid", "requestid", "message"].includes(key.toLowerCase())
+  ) {
+    const candidate = value[key];
+
+    if (candidate !== null && candidate !== undefined) {
+      const result = String(candidate).trim();
+
+      if (result) return result;
     }
+  }
+}
 
     for (const key of keys) {
       const found = extractReqId(value[key]);
@@ -715,4 +719,4 @@ export default function RegisterPage() {
       </div>
     </main>
   );
-}
+} 
