@@ -25,9 +25,18 @@ async function verifyMSG91AccessToken(accessToken: string) {
     }
   );
 
-  const data = await response.json();
+  const text = await response.text();
 
-  console.log("MSG91 access token verification:", data);
+  console.log("MSG91 verify HTTP status:", response.status);
+  console.log("MSG91 verify raw response:", text);
+
+  let data: any;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { raw: text };
+  }
 
   if (!response.ok) {
     return {
@@ -36,11 +45,6 @@ async function verifyMSG91AccessToken(accessToken: string) {
     };
   }
 
-  /*
-   * MSG91's exact response shape can vary.
-   * Treat a successful HTTP response as verified unless
-   * the response explicitly reports failure.
-   */
   const status = String(
     data?.type ||
       data?.status ||
@@ -137,30 +141,29 @@ export async function POST(request: Request) {
       );
     }
 
-    /*
-     * Verify the OTP result with MSG91 BEFORE creating
-     * anything in our database.
-     */
-    const msg91Verification = await verifyMSG91AccessToken(
-      msg91AccessToken
+    console.log("Verifying MSG91 access token...");
+
+    const msg91Verification =
+      await verifyMSG91AccessToken(msg91AccessToken);
+
+    console.log(
+      "MSG91 verification result:",
+      msg91Verification
     );
 
     if (!msg91Verification.verified) {
       return NextResponse.json(
         {
-          error: "Phone verification failed. Please verify your OTP again.",
+          error:
+            "Phone verification failed. Please verify your OTP again.",
+          msg91: msg91Verification.data,
         },
         { status: 401 }
       );
     }
 
-    /*
-     * Check whether email already exists.
-     */
     const existingEmail = await prisma.user.findUnique({
-      where: {
-        email,
-      },
+      where: { email },
     });
 
     if (existingEmail) {
@@ -172,13 +175,8 @@ export async function POST(request: Request) {
       );
     }
 
-    /*
-     * Check whether username already exists.
-     */
     const existingUsername = await prisma.user.findUnique({
-      where: {
-        username,
-      },
+      where: { username },
     });
 
     if (existingUsername) {
@@ -190,13 +188,8 @@ export async function POST(request: Request) {
       );
     }
 
-    /*
-     * Check whether phone already exists.
-     */
     const existingPhone = await prisma.user.findFirst({
-      where: {
-        phone,
-      },
+      where: { phone },
     });
 
     if (existingPhone) {
@@ -242,7 +235,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       {
-        error: "Something went wrong while creating your account.",
+        error:
+          "Something went wrong while creating your account.",
       },
       { status: 500 }
     );
