@@ -145,12 +145,101 @@ export default function RegisterPage() {
     }
   }
 
+  function extractReqId(value: any): string {
+    if (value == null) return "";
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+
+      try {
+        return extractReqId(JSON.parse(trimmed));
+      } catch {
+        return "";
+      }
+    }
+
+    if (typeof value !== "object") return "";
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractReqId(item);
+        if (found) return found;
+      }
+      return "";
+    }
+
+    const keys = Object.keys(value);
+
+    for (const key of keys) {
+      if (["reqid", "requestid"].includes(key.toLowerCase())) {
+        const candidate = value[key];
+        if (candidate !== null && candidate !== undefined) {
+          const result = String(candidate).trim();
+          if (result) return result;
+        }
+      }
+    }
+
+    for (const key of keys) {
+      const found = extractReqId(value[key]);
+      if (found) return found;
+    }
+
+    return "";
+  }
+
+  function extractAccessToken(value: any): string {
+    if (value == null) return "";
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+      if (!trimmed) return "";
+
+      try {
+        return extractAccessToken(JSON.parse(trimmed));
+      } catch {
+        return "";
+      }
+    }
+
+    if (typeof value !== "object") return "";
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractAccessToken(item);
+        if (found) return found;
+      }
+      return "";
+    }
+
+    const keys = Object.keys(value);
+
+    for (const key of keys) {
+      if (
+        ["accesstoken", "access_token", "access-token", "token"].includes(
+          key.toLowerCase()
+        )
+      ) {
+        const candidate = value[key];
+        if (typeof candidate === "string" && candidate.trim()) {
+          return candidate.trim();
+        }
+      }
+    }
+
+    for (const key of keys) {
+      const found = extractAccessToken(value[key]);
+      if (found) return found;
+    }
+
+    return "";
+  }
+
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
 
-    if (otpSent) {
-      return;
-    }
+    if (otpSent) return;
 
     if (!msg91Ready || !window.sendOtp) {
       alert("OTP service is still loading. Please wait a moment and try again.");
@@ -165,39 +254,43 @@ export default function RegisterPage() {
     }
 
     setOtpLoading(true);
+    setReqId("");
+
+    console.log("MSG91: sending OTP to", `91${cleanPhone}`);
 
     window.sendOtp(
       `91${cleanPhone}`,
-
       (data) => {
-        console.log("OTP sent:", data);
+        console.log("MSG91 SEND OTP RESPONSE:", data);
 
-        const responseReqId =
-          data?.reqId ||
-          data?.reqID ||
-          data?.data?.reqId ||
-          data?.data?.reqID ||
-          "";
+        const newReqId = extractReqId(data);
 
-        if (!responseReqId) {
-          console.warn("MSG91 did not return a reqId:", data);
+        console.log("MSG91 REQUEST ID:", newReqId);
+
+        if (!newReqId) {
+          console.error("MSG91 returned no reqId:", data);
+          setOtpLoading(false);
+          setOtpSent(false);
+          alert(
+            "OTP was sent, but MSG91 did not return the request ID. Please try again."
+          );
+          return;
         }
 
-        setReqId(responseReqId);
+        setReqId(newReqId);
         setOtpSent(true);
+        setOtp("");
         setOtpLoading(false);
       },
-
       (error) => {
-        console.error("OTP sending failed:", error);
+        console.error("MSG91 SEND OTP ERROR:", error);
+        setOtpLoading(false);
 
         alert(
           error?.message ||
             error?.error ||
             "Could not send OTP. Please check your phone number and try again."
         );
-
-        setOtpLoading(false);
       }
     );
   }
@@ -220,54 +313,39 @@ export default function RegisterPage() {
 
     setOtpLoading(true);
 
+    console.log("MSG91 VERIFY OTP:", {
+      reqId,
+      otpLength: otp.length,
+    });
+
     window.verifyOtp(
       otp,
-
       async (data) => {
-        console.log("OTP verification response:", data);
+        console.log("MSG91 VERIFY OTP RESPONSE:", data);
 
-        /*
-         * MSG91's access token can be returned in different response shapes.
-         * We check the common ones.
-         */
-        const accessToken =
-          data?.accessToken ||
-          data?.access_token ||
-          data?.["access-token"] ||
-          data?.token ||
-          data?.message ||
-          data?.data?.accessToken ||
-          data?.data?.access_token ||
-          data?.data?.["access-token"] ||
-          data?.data?.token ||
-          data?.data?.message;
+        const accessToken = extractAccessToken(data);
 
-        if (!accessToken || typeof accessToken !== "string") {
-          console.error("No MSG91 access token found:", data);
-
+        if (!accessToken) {
+          console.error("MSG91 returned no access token:", data);
+          setOtpLoading(false);
           alert(
             "OTP was verified, but MSG91 did not return an access token."
           );
-
-          setOtpLoading(false);
           return;
         }
 
         await createAccount(accessToken);
       },
-
       (error) => {
-        console.error("OTP verification failed:", error);
+        console.error("MSG91 VERIFY OTP ERROR:", error);
+        setOtpLoading(false);
 
         alert(
           error?.message ||
             error?.error ||
             "Invalid or expired OTP. Please try again."
         );
-
-        setOtpLoading(false);
       },
-
       reqId
     );
   }
@@ -279,34 +357,43 @@ export default function RegisterPage() {
     }
 
     if (!reqId) {
-      alert("No OTP request found. Please enter your phone number again.");
+      alert("No OTP request found. Please send the OTP again.");
       return;
     }
 
     setOtpLoading(true);
 
+    console.log("MSG91 RESEND OTP:", {
+      reqId,
+      channel: "11",
+    });
+
     window.retryOtp(
       "11",
-
       (data) => {
-        console.log("OTP resent:", data);
-        alert("A new OTP has been sent.");
+        console.log("MSG91 RESEND OTP RESPONSE:", data);
+
+        const newReqId = extractReqId(data);
+
+        if (newReqId) {
+          setReqId(newReqId);
+          console.log("MSG91 NEW REQUEST ID:", newReqId);
+        }
+
         setOtp("");
         setOtpLoading(false);
+        alert("A new OTP has been sent.");
       },
-
       (error) => {
-        console.error("OTP resend failed:", error);
+        console.error("MSG91 RESEND OTP ERROR:", error);
+        setOtpLoading(false);
 
         alert(
           error?.message ||
             error?.error ||
             "Unable to resend OTP. Please try again."
         );
-
-        setOtpLoading(false);
       },
-
       reqId
     );
   }
