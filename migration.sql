@@ -1,23 +1,23 @@
--- CreateTable
-CREATE TABLE "User" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
-    "name" TEXT NOT NULL,
-    "username" TEXT NOT NULL,
-    "email" TEXT NOT NULL,
-    "password" TEXT NOT NULL,
-    "bio" TEXT,
-    "avatar" TEXT NOT NULL DEFAULT 'avatar1',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "phone" TEXT,
-    "githubUrl" TEXT,
-    "linkedinUrl" TEXT,
-    "instagramUrl" TEXT,
-    "portfolioUrl" TEXT,
-    "otherUrl" TEXT,
-    "emailVisibility" TEXT NOT NULL DEFAULT 'accepted',
-    "phoneVisibility" TEXT NOT NULL DEFAULT 'accepted',
-    "socialVisibility" TEXT NOT NULL DEFAULT 'matches'
-);
+    -- CreateTable
+    CREATE TABLE "User" (
+        "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+        "name" TEXT NOT NULL,
+        "username" TEXT NOT NULL,
+        "email" TEXT NOT NULL,
+        "password" TEXT NOT NULL,
+        "bio" TEXT,
+        "avatar" TEXT NOT NULL DEFAULT 'avatar1',
+        "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        "phone" TEXT,
+        "githubUrl" TEXT,
+        "linkedinUrl" TEXT,
+        "instagramUrl" TEXT,
+        "portfolioUrl" TEXT,
+        "otherUrl" TEXT,
+        "emailVisibility" TEXT NOT NULL DEFAULT 'accepted',
+        "phoneVisibility" TEXT NOT NULL DEFAULT 'accepted',
+        "socialVisibility" TEXT NOT NULL DEFAULT 'matches'
+    );
 
 -- CreateTable
 CREATE TABLE "Skill" (

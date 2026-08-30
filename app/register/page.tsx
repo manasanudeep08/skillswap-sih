@@ -18,8 +18,8 @@ declare global {
       tokenAuth: string;
       identifier?: string;
       exposeMethods: boolean;
-      success?: (data: unknown) => void;
-      failure?: (error: unknown) => void;
+      success?: (data: any) => void;
+      failure?: (error: any) => void;
     }) => void;
 
     sendOtp?: (
@@ -62,53 +62,364 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [msg91Ready, setMsg91Ready] = useState(false);
 
+  /*
+   * ============================================================
+   * LOAD MSG91
+   * ============================================================
+   */
+
   useEffect(() => {
+    const existingScript = document.querySelector(
+      'script[data-msg91-otp="true"]'
+    );
+
+    if (existingScript) {
+      if (typeof window.initSendOTP === "function") {
+        initializeMSG91();
+      }
+
+      return;
+    }
+
     const script = document.createElement("script");
 
     script.src = "https://verify.msg91.com/otp-provider.js";
     script.async = true;
+    script.setAttribute("data-msg91-otp", "true");
 
     script.onload = () => {
-      if (
-        typeof window.initSendOTP === "function" &&
-        process.env.NEXT_PUBLIC_MSG91_WIDGET_ID &&
-        process.env.NEXT_PUBLIC_MSG91_WIDGET_TOKEN
-      ) {
-        window.initSendOTP({
-          widgetId: process.env.NEXT_PUBLIC_MSG91_WIDGET_ID,
-          tokenAuth: process.env.NEXT_PUBLIC_MSG91_WIDGET_TOKEN,
-          exposeMethods: true,
-
-          success: (data) => {
-            console.log("MSG91 success:", data);
-          },
-
-          failure: (error) => {
-            console.error("MSG91 failure:", error);
-          },
-        });
-
-        setMsg91Ready(true);
-      } else {
-        console.error("MSG91 widget configuration is missing.");
-      }
+      initializeMSG91();
     };
 
     script.onerror = () => {
-      console.error("Unable to load MSG91 OTP script.");
+      console.error("MSG91: Unable to load OTP script.");
+      setMsg91Ready(false);
     };
 
     document.head.appendChild(script);
 
     return () => {
-      document.head.removeChild(script);
+      // Do not remove the MSG91 script.
+      // Removing it can break the widget when React remounts.
     };
   }, []);
+
+  function initializeMSG91() {
+    const widgetId = process.env.NEXT_PUBLIC_MSG91_WIDGET_ID;
+    const widgetToken = process.env.NEXT_PUBLIC_MSG91_WIDGET_TOKEN;
+
+    if (!widgetId) {
+      console.error("MSG91: NEXT_PUBLIC_MSG91_WIDGET_ID is missing.");
+      return;
+    }
+
+    if (!widgetToken) {
+      console.error("MSG91: NEXT_PUBLIC_MSG91_WIDGET_TOKEN is missing.");
+      return;
+    }
+
+    if (typeof window.initSendOTP !== "function") {
+      console.error("MSG91: initSendOTP is not available.");
+      return;
+    }
+
+    try {
+      window.initSendOTP({
+        widgetId,
+        tokenAuth: widgetToken,
+        exposeMethods: true,
+
+        /*
+         * We intentionally don't handle verification here.
+         *
+         * We handle sendOtp / verifyOtp ourselves below.
+         * This avoids duplicate success/failure callbacks.
+         */
+        success: (data) => {
+          console.log("MSG91 widget success:", data);
+        },
+
+        failure: (error) => {
+          console.error("MSG91 widget failure:", error);
+        },
+      });
+
+      setMsg91Ready(true);
+
+      console.log("MSG91: widget initialized successfully.");
+    } catch (error) {
+      console.error("MSG91: widget initialization failed:", error);
+      setMsg91Ready(false);
+    }
+  }
+
+  /*
+   * ============================================================
+   * EXTRACT REQUEST ID
+   * ============================================================
+   *
+   * MSG91 can return:
+   *
+   * {
+   *   message: "366844616354373332393833",
+   *   type: "success"
+   * }
+   *
+   * IMPORTANT:
+   *
+   * "success" is NOT the request ID.
+   * "message" is the request ID in this response.
+   */
+
+  function extractReqId(value: any): string {
+    if (value == null) {
+      return "";
+    }
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      if (!trimmed) {
+        return "";
+      }
+
+      /*
+       * Sometimes the SDK may return JSON as a string.
+       */
+      try {
+        const parsed = JSON.parse(trimmed);
+        return extractReqId(parsed);
+      } catch {
+        /*
+         * A plain string can itself be a request ID.
+         */
+        if (
+          trimmed.toLowerCase() !== "success" &&
+          trimmed.toLowerCase() !== "ok"
+        ) {
+          return trimmed;
+        }
+
+        return "";
+      }
+    }
+
+    if (typeof value !== "object") {
+      return "";
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractReqId(item);
+
+        if (found) {
+          return found;
+        }
+      }
+
+      return "";
+    }
+
+    /*
+     * Check the most likely request ID fields first.
+     */
+    const directKeys = [
+      "reqId",
+      "reqID",
+      "requestId",
+      "requestID",
+      "message",
+    ];
+
+    for (const key of directKeys) {
+      const candidate = value[key];
+
+      if (
+        candidate !== null &&
+        candidate !== undefined &&
+        typeof candidate === "string"
+      ) {
+        const result = candidate.trim();
+
+        if (
+          result &&
+          result.toLowerCase() !== "success" &&
+          result.toLowerCase() !== "ok"
+        ) {
+          return result;
+        }
+      }
+    }
+
+    /*
+     * Search nested objects.
+     */
+    for (const key of Object.keys(value)) {
+      const found = extractReqId(value[key]);
+
+      if (found) {
+        return found;
+      }
+    }
+
+    return "";
+  }
+
+  /*
+   * ============================================================
+   * EXTRACT ACCESS TOKEN
+   * ============================================================
+   *
+   * MSG91 Verify OTP returns a JWT access token.
+   *
+   * Depending on the SDK version/response it may appear as:
+   *
+   * accessToken
+   * access_token
+   * access-token
+   * token
+   * message
+   *
+   * It can also potentially be returned directly as a string.
+   */
+
+  function extractAccessToken(value: any): string {
+    if (value == null) {
+      return "";
+    }
+
+    /*
+     * If the SDK gives us the JWT directly as a string,
+     * accept it.
+     */
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      if (!trimmed) {
+        return "";
+      }
+
+      /*
+       * If it looks like JSON, inspect the JSON.
+       */
+      try {
+        const parsed = JSON.parse(trimmed);
+
+        return extractAccessToken(parsed);
+      } catch {
+        /*
+         * Otherwise treat the string as the token itself.
+         *
+         * JWTs normally look like:
+         * eyJxxxxx.yyyyy.zzzzz
+         */
+        if (trimmed.split(".").length === 3) {
+          return trimmed;
+        }
+
+        return "";
+      }
+    }
+
+    if (typeof value !== "object") {
+      return "";
+    }
+
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const found = extractAccessToken(item);
+
+        if (found) {
+          return found;
+        }
+      }
+
+      return "";
+    }
+
+    /*
+     * Check explicit token fields first.
+     */
+    const tokenKeys = [
+      "accessToken",
+      "access_token",
+      "access-token",
+      "token",
+    ];
+
+    for (const key of tokenKeys) {
+      const candidate = value[key];
+
+      if (typeof candidate === "string") {
+        const trimmed = candidate.trim();
+
+        if (
+          trimmed &&
+          trimmed.toLowerCase() !== "success" &&
+          trimmed.toLowerCase() !== "ok"
+        ) {
+          /*
+           * Prefer JWT-looking values.
+           */
+          if (trimmed.split(".").length === 3) {
+            return trimmed;
+          }
+
+          /*
+           * Also accept non-JWT token strings in case
+           * MSG91 changes its token format.
+           */
+          return trimmed;
+        }
+      }
+    }
+
+    /*
+     * MSG91 may return the token in "message".
+     */
+    if (typeof value.message === "string") {
+      const message = value.message.trim();
+
+      if (
+        message &&
+        message.toLowerCase() !== "success" &&
+        message.toLowerCase() !== "ok"
+      ) {
+        /*
+         * If it is a JWT, definitely use it.
+         */
+        if (message.split(".").length === 3) {
+          return message;
+        }
+      }
+    }
+
+    /*
+     * Search nested objects.
+     */
+    for (const key of Object.keys(value)) {
+      const found = extractAccessToken(value[key]);
+
+      if (found) {
+        return found;
+      }
+    }
+
+    return "";
+  }
+
+  /*
+   * ============================================================
+   * CREATE ACCOUNT
+   * ============================================================
+   */
 
   async function createAccount(accessToken: string) {
     setLoading(true);
 
     try {
+      console.log("Sending MSG91 access token to server.");
+
       const response = await fetch("/api/register", {
         method: "POST",
         headers: {
@@ -128,16 +439,25 @@ export default function RegisterPage() {
 
       const data = await response.json();
 
+      console.log("REGISTER API RESPONSE:", data);
+
       if (!response.ok) {
-        alert(data.error || "Something went wrong while creating your account.");
+        alert(
+          data?.error ||
+            "Something went wrong while creating your account."
+        );
+
         return;
       }
 
       setVerified(true);
 
+      alert("Account created successfully!");
+
       window.location.href = "/";
     } catch (error) {
       console.error("Account creation error:", error);
+
       alert("Unable to connect to the server.");
     } finally {
       setLoading(false);
@@ -145,116 +465,24 @@ export default function RegisterPage() {
     }
   }
 
-  function extractReqId(value: any): string {
-    if (value == null) return "";
-
-    // MSG91 can return the request ID directly as a string.
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      if (!trimmed) return "";
-
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed === "string") return parsed.trim();
-        return extractReqId(parsed);
-      } catch {
-        return trimmed;
-      }
-    }
-
-    if (typeof value !== "object") return "";
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = extractReqId(item);
-        if (found) return found;
-      }
-      return "";
-    }
-
-    const keys = Object.keys(value);
-
-    for (const key of keys) {
-      const normalized = key.toLowerCase().replace(/[_-]/g, "");
-
-      if (["reqid", "requestid"].includes(normalized)) {
-        const candidate = value[key];
-
-        if (candidate !== null && candidate !== undefined) {
-          const result = String(candidate).trim();
-          if (result) return result;
-        }
-      }
-    }
-
-    for (const key of keys) {
-      const found = extractReqId(value[key]);
-      if (found) return found;
-    }
-
-    return "";
-  }
-
-  function extractAccessToken(value: any): string {
-    if (value == null) return "";
-
-    // MSG91 can return the JWT directly as a string.
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-      if (!trimmed) return "";
-
-      try {
-        const parsed = JSON.parse(trimmed);
-        if (typeof parsed === "string") return parsed.trim();
-        return extractAccessToken(parsed);
-      } catch {
-        // A JWT is a non-JSON string with three dot-separated parts.
-        if (trimmed.split(".").length === 3) {
-          return trimmed;
-        }
-        return "";
-      }
-    }
-
-    if (typeof value !== "object") return "";
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = extractAccessToken(item);
-        if (found) return found;
-      }
-      return "";
-    }
-
-    const keys = Object.keys(value);
-
-    for (const key of keys) {
-      const normalized = key.toLowerCase().replace(/[_-]/g, "");
-
-      if (["accesstoken", "token"].includes(normalized)) {
-        const candidate = value[key];
-
-        if (typeof candidate === "string" && candidate.trim()) {
-          return candidate.trim();
-        }
-      }
-    }
-
-    for (const key of keys) {
-      const found = extractAccessToken(value[key]);
-      if (found) return found;
-    }
-
-    return "";
-  }
+  /*
+   * ============================================================
+   * SEND OTP
+   * ============================================================
+   */
 
   async function handleRegister(e: React.FormEvent) {
     e.preventDefault();
 
-    if (otpSent) return;
+    if (otpSent) {
+      return;
+    }
 
-    if (!msg91Ready || !window.sendOtp) {
-      alert("OTP service is still loading. Please wait a moment and try again.");
+    if (!msg91Ready || typeof window.sendOtp !== "function") {
+      alert(
+        "OTP service is still loading. Please wait a moment and try again."
+      );
+
       return;
     }
 
@@ -272,6 +500,10 @@ export default function RegisterPage() {
 
     window.sendOtp(
       `91${cleanPhone}`,
+
+      /*
+       * SUCCESS
+       */
       (data) => {
         console.log("MSG91 SEND OTP RESPONSE:", data);
 
@@ -280,12 +512,18 @@ export default function RegisterPage() {
         console.log("MSG91 REQUEST ID:", newReqId);
 
         if (!newReqId) {
-          console.error("MSG91 returned no reqId:", data);
+          console.error(
+            "MSG91 returned no usable request ID:",
+            data
+          );
+
           setOtpLoading(false);
           setOtpSent(false);
+
           alert(
-            "OTP was sent, but MSG91 did not return the request ID. Please try again."
+            "MSG91 sent the OTP but did not return a valid request ID. Please try again."
           );
+
           return;
         }
 
@@ -294,32 +532,53 @@ export default function RegisterPage() {
         setOtp("");
         setOtpLoading(false);
       },
+
+      /*
+       * FAILURE
+       */
       (error) => {
         console.error("MSG91 SEND OTP ERROR:", error);
+
         setOtpLoading(false);
 
-        alert(
+        const errorMessage =
           error?.message ||
-            error?.error ||
-            "Could not send OTP. Please check your phone number and try again."
-        );
+          error?.error ||
+          "Could not send OTP. Please check your phone number and try again.";
+
+        alert(errorMessage);
       }
     );
   }
 
+  /*
+   * ============================================================
+   * VERIFY OTP
+   * ============================================================
+   */
+
   function handleVerifyOtp() {
-    if (!window.verifyOtp) {
+    if (typeof window.verifyOtp !== "function") {
       alert("OTP service is still loading. Please try again.");
+
       return;
     }
 
     if (!otp || otp.length < 4) {
       alert("Enter the OTP you received.");
+
       return;
     }
 
     if (!reqId) {
-      alert("The OTP request ID is missing. Please send the OTP again.");
+      alert(
+        "The OTP request ID is missing. Please send the OTP again."
+      );
+
+      return;
+    }
+
+    if (otpLoading) {
       return;
     }
 
@@ -332,44 +591,84 @@ export default function RegisterPage() {
 
     window.verifyOtp(
       otp,
+
+      /*
+       * SUCCESS
+       */
       async (data) => {
         console.log("MSG91 VERIFY OTP RESPONSE:", data);
 
         const accessToken = extractAccessToken(data);
 
+        /*
+         * VERY IMPORTANT DEBUGGING LOG.
+         *
+         * We don't print the actual token for security.
+         */
+        console.log("MSG91 ACCESS TOKEN RECEIVED:", {
+          received: Boolean(accessToken),
+          length: accessToken.length,
+          looksLikeJWT: accessToken.split(".").length === 3,
+        });
+
         if (!accessToken) {
-          console.error("MSG91 returned no access token:", data);
-          setOtpLoading(false);
-          alert(
-            "OTP was verified, but MSG91 did not return an access token."
+          console.error(
+            "MSG91 returned no usable access token. Full response:",
+            data
           );
+
+          setOtpLoading(false);
+
+          alert(
+            "OTP was verified, but MSG91 did not return an access token. Please try again."
+          );
+
           return;
         }
 
         await createAccount(accessToken);
       },
+
+      /*
+       * FAILURE
+       */
       (error) => {
         console.error("MSG91 VERIFY OTP ERROR:", error);
+
         setOtpLoading(false);
 
-        alert(
+        const errorMessage =
           error?.message ||
-            error?.error ||
-            "Invalid or expired OTP. Please try again."
-        );
+          error?.error ||
+          "Invalid or expired OTP. Please try again.";
+
+        alert(errorMessage);
       },
+
       reqId
     );
   }
 
+  /*
+   * ============================================================
+   * RESEND OTP
+   * ============================================================
+   */
+
   function handleResendOtp() {
-    if (!window.retryOtp) {
+    if (typeof window.retryOtp !== "function") {
       alert("OTP service is still loading.");
+
       return;
     }
 
     if (!reqId) {
       alert("No OTP request found. Please send the OTP again.");
+
+      return;
+    }
+
+    if (otpLoading) {
       return;
     }
 
@@ -382,6 +681,10 @@ export default function RegisterPage() {
 
     window.retryOtp(
       "11",
+
+      /*
+       * SUCCESS
+       */
       (data) => {
         console.log("MSG91 RESEND OTP RESPONSE:", data);
 
@@ -389,33 +692,65 @@ export default function RegisterPage() {
 
         if (newReqId) {
           setReqId(newReqId);
-          console.log("MSG91 NEW REQUEST ID:", newReqId);
+
+          console.log(
+            "MSG91 NEW REQUEST ID:",
+            newReqId
+          );
+        } else {
+          console.warn(
+            "MSG91 resend did not return a new request ID. Keeping old request ID."
+          );
         }
 
         setOtp("");
         setOtpLoading(false);
+
         alert("A new OTP has been sent.");
       },
+
+      /*
+       * FAILURE
+       */
       (error) => {
         console.error("MSG91 RESEND OTP ERROR:", error);
+
         setOtpLoading(false);
 
-        alert(
+        const errorMessage =
           error?.message ||
-            error?.error ||
-            "Unable to resend OTP. Please try again."
-        );
+          error?.error ||
+          "Unable to resend OTP. Please try again.";
+
+        alert(errorMessage);
       },
+
       reqId
     );
   }
 
+  /*
+   * ============================================================
+   * CHANGE PHONE
+   * ============================================================
+   */
+
   function changePhoneNumber() {
+    if (otpLoading) {
+      return;
+    }
+
     setOtpSent(false);
     setOtp("");
     setReqId("");
     setVerified(false);
   }
+
+  /*
+   * ============================================================
+   * UI
+   * ============================================================
+   */
 
   return (
     <main className="min-h-screen bg-[#f7f7fb] text-zinc-950">
@@ -450,7 +785,8 @@ export default function RegisterPage() {
             </div>
 
             <form onSubmit={handleRegister} className="space-y-5">
-              {/* Name */}
+              {/* NAME */}
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Full name
@@ -467,7 +803,8 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Username */}
+              {/* USERNAME */}
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Username
@@ -482,7 +819,11 @@ export default function RegisterPage() {
                     type="text"
                     value={username}
                     onChange={(e) =>
-                      setUsername(e.target.value.toLowerCase())
+                      setUsername(
+                        e.target.value
+                          .toLowerCase()
+                          .replace(/[^a-z0-9_]/g, "")
+                      )
                     }
                     placeholder="yourusername"
                     required
@@ -497,7 +838,8 @@ export default function RegisterPage() {
                 </p>
               </div>
 
-              {/* Email */}
+              {/* EMAIL */}
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Email address
@@ -514,7 +856,8 @@ export default function RegisterPage() {
                 />
               </div>
 
-              {/* Phone */}
+              {/* PHONE */}
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Phone number
@@ -531,7 +874,9 @@ export default function RegisterPage() {
                     value={phone}
                     onChange={(e) =>
                       setPhone(
-                        e.target.value.replace(/\D/g, "").slice(0, 10)
+                        e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 10)
                       )
                     }
                     placeholder="9876543210"
@@ -547,6 +892,7 @@ export default function RegisterPage() {
               </div>
 
               {/* OTP */}
+
               {otpSent && !verified && (
                 <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4">
                   <div className="mb-3">
@@ -567,7 +913,9 @@ export default function RegisterPage() {
                     value={otp}
                     onChange={(e) =>
                       setOtp(
-                        e.target.value.replace(/\D/g, "").slice(0, 8)
+                        e.target.value
+                          .replace(/\D/g, "")
+                          .slice(0, 8)
                       )
                     }
                     placeholder="Enter OTP"
@@ -605,7 +953,8 @@ export default function RegisterPage() {
                 </div>
               )}
 
-              {/* Password */}
+              {/* PASSWORD */}
+
               <div>
                 <label className="mb-2 block text-sm font-bold text-zinc-900">
                   Password
@@ -627,7 +976,8 @@ export default function RegisterPage() {
                 </p>
               </div>
 
-              {/* Bio */}
+              {/* BIO */}
+
               <div>
                 <div className="mb-2 flex items-center justify-between">
                   <label className="text-sm font-bold text-zinc-900">
@@ -654,7 +1004,8 @@ export default function RegisterPage() {
                 </p>
               </div>
 
-              {/* Avatar */}
+              {/* AVATAR */}
+
               <div>
                 <label className="mb-3 block text-sm font-bold text-zinc-900">
                   Choose your avatar
@@ -679,11 +1030,16 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              {/* Main button */}
+              {/* CREATE ACCOUNT */}
+
               {!otpSent && (
                 <button
                   type="submit"
-                  disabled={otpLoading || loading || !msg91Ready}
+                  disabled={
+                    otpLoading ||
+                    loading ||
+                    !msg91Ready
+                  }
                   className="group flex h-12 w-full items-center justify-center rounded-xl bg-violet-600 font-bold text-white shadow-lg shadow-violet-600/20 transition hover:bg-violet-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
                 >
                   {otpLoading
@@ -704,7 +1060,9 @@ export default function RegisterPage() {
             <div className="my-7 flex items-center gap-4">
               <div className="h-px flex-1 bg-zinc-200" />
 
-              <span className="text-xs font-semibold text-zinc-400">OR</span>
+              <span className="text-xs font-semibold text-zinc-400">
+                OR
+              </span>
 
               <div className="h-px flex-1 bg-zinc-200" />
             </div>
@@ -727,4 +1085,4 @@ export default function RegisterPage() {
       </div>
     </main>
   );
-} 
+}
