@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "../../../lib/prisma";
 import { hash } from "bcryptjs";
+import crypto from "crypto";
 
 export async function POST(request: Request) {
   try {
@@ -72,11 +73,10 @@ export async function POST(request: Request) {
      * DEMO OTP MODE
      * ============================================================
      *
-     * MSG91 sends the actual OTP from the frontend.
+     * MSG91 sends the real OTP.
      *
-     * The OTP entered by the user is NOT checked here.
-     *
-     * This is intentionally only for the demo version.
+     * The OTP entered by the user is accepted by the
+     * frontend without checking whether it matches.
      */
 
     console.log("Registration using DEMO OTP verification.");
@@ -172,14 +172,34 @@ export async function POST(request: Request) {
 
     /*
      * ============================================================
-     * SUCCESS
+     * CREATE SESSION
+     * ============================================================
+     *
+     * This is what makes the user automatically logged in
+     * after registration.
+     */
+
+    const sessionId = crypto.randomUUID();
+
+    await prisma.session.create({
+      data: {
+        id: sessionId,
+        userId: user.id,
+        expiresAt: new Date(
+          Date.now() + 7 * 24 * 60 * 60 * 1000
+        ),
+      },
+    });
+
+    /*
+     * ============================================================
+     * RESPONSE
      * ============================================================
      */
 
-    return NextResponse.json(
+    const response = NextResponse.json(
       {
         message: "Account created successfully.",
-
         user: {
           id: user.id,
           name: user.name,
@@ -192,6 +212,22 @@ export async function POST(request: Request) {
       },
       { status: 201 }
     );
+
+    /*
+     * ============================================================
+     * LOGIN COOKIE
+     * ============================================================
+     */
+
+    response.cookies.set("session", sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 7 * 24 * 60 * 60,
+      path: "/",
+    });
+
+    return response;
   } catch (error) {
     console.error("Registration error:", error);
 

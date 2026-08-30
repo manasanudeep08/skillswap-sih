@@ -233,55 +233,69 @@ export default function RegisterPage() {
    * ============================================================
    */
 
-  async function createAccount() {
-    setLoading(true);
+async function createAccount() {
+  setLoading(true);
 
-    try {
-      console.log("Creating account in DEMO OTP mode.");
+  try {
+    console.log("Creating account in DEMO OTP mode.");
 
-      const response = await fetch("/api/register", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          name,
-          username,
-          email,
-          password,
-          bio,
-          avatar,
-          phone: `+91${phone}`,
-        }),
-      });
+    const response = await fetch("/api/register", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name,
+        username,
+        email,
+        password,
+        bio,
+        avatar,
+        phone: `+91${phone}`,
+      }),
+    });
 
-      const data = await response.json();
+    const data = await response.json();
 
-      console.log("REGISTER API RESPONSE:", data);
+    console.log("REGISTER API RESPONSE:", data);
 
-      if (!response.ok) {
-        alert(
-          data?.error ||
-            "Something went wrong while creating your account."
-        );
+    if (!response.ok) {
+      alert(
+        data?.error ||
+          "Something went wrong while creating your account."
+      );
 
-        return;
-      }
-
-      setVerified(true);
-
-      alert("Account created successfully!");
-
-      window.location.href = "/";
-    } catch (error) {
-      console.error("Account creation error:", error);
-
-      alert("Unable to connect to the server.");
-    } finally {
-      setLoading(false);
-      setOtpLoading(false);
+      return;
     }
+
+    /*
+     * The register API has already:
+     *
+     * 1. Created the account
+     * 2. Created a session
+     * 3. Set the session cookie
+     *
+     * So the user is already logged in.
+     */
+
+    setVerified(true);
+
+    /*
+     * No success popup.
+     *
+     * Go directly to the home page.
+     */
+
+    window.location.href = "/";
+  } catch (error) {
+    console.error("Account creation error:", error);
+
+    alert("Unable to connect to the server.");
+  } finally {
+    setLoading(false);
+    setOtpLoading(false);
   }
+}
 
   /*
    * ============================================================
