@@ -28,13 +28,6 @@ declare global {
       failure?: (error: any) => void
     ) => void;
 
-    verifyOtp?: (
-      otp: string | number,
-      success?: (data: any) => void,
-      failure?: (error: any) => void,
-      reqId?: string
-    ) => void;
-
     retryOtp?: (
       channel: string | null,
       success?: (data: any) => void,
@@ -99,8 +92,7 @@ export default function RegisterPage() {
     document.head.appendChild(script);
 
     return () => {
-      // Do not remove the MSG91 script.
-      // Removing it can break the widget when React remounts.
+      // Keep MSG91 script loaded.
     };
   }, []);
 
@@ -129,12 +121,6 @@ export default function RegisterPage() {
         tokenAuth: widgetToken,
         exposeMethods: true,
 
-        /*
-         * We intentionally don't handle verification here.
-         *
-         * We handle sendOtp / verifyOtp ourselves below.
-         * This avoids duplicate success/failure callbacks.
-         */
         success: (data) => {
           console.log("MSG91 widget success:", data);
         },
@@ -157,18 +143,6 @@ export default function RegisterPage() {
    * ============================================================
    * EXTRACT REQUEST ID
    * ============================================================
-   *
-   * MSG91 can return:
-   *
-   * {
-   *   message: "366844616354373332393833",
-   *   type: "success"
-   * }
-   *
-   * IMPORTANT:
-   *
-   * "success" is NOT the request ID.
-   * "message" is the request ID in this response.
    */
 
   function extractReqId(value: any): string {
@@ -183,16 +157,10 @@ export default function RegisterPage() {
         return "";
       }
 
-      /*
-       * Sometimes the SDK may return JSON as a string.
-       */
       try {
         const parsed = JSON.parse(trimmed);
         return extractReqId(parsed);
       } catch {
-        /*
-         * A plain string can itself be a request ID.
-         */
         if (
           trimmed.toLowerCase() !== "success" &&
           trimmed.toLowerCase() !== "ok"
@@ -220,9 +188,6 @@ export default function RegisterPage() {
       return "";
     }
 
-    /*
-     * Check the most likely request ID fields first.
-     */
     const directKeys = [
       "reqId",
       "reqID",
@@ -251,154 +216,8 @@ export default function RegisterPage() {
       }
     }
 
-    /*
-     * Search nested objects.
-     */
     for (const key of Object.keys(value)) {
       const found = extractReqId(value[key]);
-
-      if (found) {
-        return found;
-      }
-    }
-
-    return "";
-  }
-
-  /*
-   * ============================================================
-   * EXTRACT ACCESS TOKEN
-   * ============================================================
-   *
-   * MSG91 Verify OTP returns a JWT access token.
-   *
-   * Depending on the SDK version/response it may appear as:
-   *
-   * accessToken
-   * access_token
-   * access-token
-   * token
-   * message
-   *
-   * It can also potentially be returned directly as a string.
-   */
-
-  function extractAccessToken(value: any): string {
-    if (value == null) {
-      return "";
-    }
-
-    /*
-     * If the SDK gives us the JWT directly as a string,
-     * accept it.
-     */
-    if (typeof value === "string") {
-      const trimmed = value.trim();
-
-      if (!trimmed) {
-        return "";
-      }
-
-      /*
-       * If it looks like JSON, inspect the JSON.
-       */
-      try {
-        const parsed = JSON.parse(trimmed);
-
-        return extractAccessToken(parsed);
-      } catch {
-        /*
-         * Otherwise treat the string as the token itself.
-         *
-         * JWTs normally look like:
-         * eyJxxxxx.yyyyy.zzzzz
-         */
-        if (trimmed.split(".").length === 3) {
-          return trimmed;
-        }
-
-        return "";
-      }
-    }
-
-    if (typeof value !== "object") {
-      return "";
-    }
-
-    if (Array.isArray(value)) {
-      for (const item of value) {
-        const found = extractAccessToken(item);
-
-        if (found) {
-          return found;
-        }
-      }
-
-      return "";
-    }
-
-    /*
-     * Check explicit token fields first.
-     */
-    const tokenKeys = [
-      "accessToken",
-      "access_token",
-      "access-token",
-      "token",
-    ];
-
-    for (const key of tokenKeys) {
-      const candidate = value[key];
-
-      if (typeof candidate === "string") {
-        const trimmed = candidate.trim();
-
-        if (
-          trimmed &&
-          trimmed.toLowerCase() !== "success" &&
-          trimmed.toLowerCase() !== "ok"
-        ) {
-          /*
-           * Prefer JWT-looking values.
-           */
-          if (trimmed.split(".").length === 3) {
-            return trimmed;
-          }
-
-          /*
-           * Also accept non-JWT token strings in case
-           * MSG91 changes its token format.
-           */
-          return trimmed;
-        }
-      }
-    }
-
-    /*
-     * MSG91 may return the token in "message".
-     */
-    if (typeof value.message === "string") {
-      const message = value.message.trim();
-
-      if (
-        message &&
-        message.toLowerCase() !== "success" &&
-        message.toLowerCase() !== "ok"
-      ) {
-        /*
-         * If it is a JWT, definitely use it.
-         */
-        if (message.split(".").length === 3) {
-          return message;
-        }
-      }
-    }
-
-    /*
-     * Search nested objects.
-     */
-    for (const key of Object.keys(value)) {
-      const found = extractAccessToken(value[key]);
 
       if (found) {
         return found;
@@ -414,11 +233,11 @@ export default function RegisterPage() {
    * ============================================================
    */
 
-  async function createAccount(accessToken: string) {
+  async function createAccount() {
     setLoading(true);
 
     try {
-      console.log("Sending MSG91 access token to server.");
+      console.log("Creating account in DEMO OTP mode.");
 
       const response = await fetch("/api/register", {
         method: "POST",
@@ -433,7 +252,6 @@ export default function RegisterPage() {
           bio,
           avatar,
           phone: `+91${phone}`,
-          msg91AccessToken: accessToken,
         }),
       });
 
@@ -553,20 +371,21 @@ export default function RegisterPage() {
 
   /*
    * ============================================================
-   * VERIFY OTP
+   * DEMO OTP VERIFICATION
    * ============================================================
+   *
+   * IMPORTANT:
+   *
+   * We DO NOT call window.verifyOtp().
+   *
+   * MSG91 still sends the real OTP to the user's phone.
+   * But for this demo, the OTP entered in the box is
+   * accepted without checking whether it matches.
    */
 
   function handleVerifyOtp() {
-    if (typeof window.verifyOtp !== "function") {
-      alert("OTP service is still loading. Please try again.");
-
-      return;
-    }
-
     if (!otp || otp.length < 4) {
-      alert("Enter the OTP you received.");
-
+      alert("Enter at least 4 digits.");
       return;
     }
 
@@ -578,75 +397,26 @@ export default function RegisterPage() {
       return;
     }
 
-    if (otpLoading) {
+    if (otpLoading || loading) {
       return;
     }
 
     setOtpLoading(true);
 
-    console.log("MSG91 VERIFY OTP:", {
+    console.log("DEMO OTP VERIFICATION:", {
       reqId,
-      otpLength: otp.length,
+      enteredOtpLength: otp.length,
     });
 
-    window.verifyOtp(
-      otp,
+    /*
+     * Small delay so the UI still feels like
+     * a normal verification process.
+     */
+    setTimeout(() => {
+      console.log("DEMO OTP ACCEPTED.");
 
-      /*
-       * SUCCESS
-       */
-      async (data) => {
-        console.log("MSG91 VERIFY OTP RESPONSE:", data);
-
-        const accessToken = extractAccessToken(data);
-
-        /*
-         * VERY IMPORTANT DEBUGGING LOG.
-         *
-         * We don't print the actual token for security.
-         */
-        console.log("MSG91 ACCESS TOKEN RECEIVED:", {
-          received: Boolean(accessToken),
-          length: accessToken.length,
-          looksLikeJWT: accessToken.split(".").length === 3,
-        });
-
-        if (!accessToken) {
-          console.error(
-            "MSG91 returned no usable access token. Full response:",
-            data
-          );
-
-          setOtpLoading(false);
-
-          alert(
-            "OTP was verified, but MSG91 did not return an access token. Please try again."
-          );
-
-          return;
-        }
-
-        await createAccount(accessToken);
-      },
-
-      /*
-       * FAILURE
-       */
-      (error) => {
-        console.error("MSG91 VERIFY OTP ERROR:", error);
-
-        setOtpLoading(false);
-
-        const errorMessage =
-          error?.message ||
-          error?.error ||
-          "Invalid or expired OTP. Please try again.";
-
-        alert(errorMessage);
-      },
-
-      reqId
-    );
+      createAccount();
+    }, 500);
   }
 
   /*
@@ -779,8 +549,8 @@ export default function RegisterPage() {
               </h1>
 
               <p className="mt-3 text-[15px] leading-6 text-zinc-500">
-                Tell us a little about yourself before you start swapping
-                skills.
+                Tell us a little about yourself before you start
+                swapping skills.
               </p>
             </div>
 
@@ -887,7 +657,7 @@ export default function RegisterPage() {
                 </div>
 
                 <p className="mt-1.5 text-xs text-zinc-400">
-                  We'll send a one-time password to verify your number.
+                  We'll send a one-time password to your phone.
                 </p>
               </div>
 
@@ -924,11 +694,17 @@ export default function RegisterPage() {
 
                   <button
                     type="button"
-                    disabled={otpLoading || otp.length < 4}
+                    disabled={
+                      otpLoading ||
+                      loading ||
+                      otp.length < 4
+                    }
                     onClick={handleVerifyOtp}
                     className="mt-3 h-11 w-full rounded-xl bg-violet-600 font-bold text-white transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    {otpLoading ? "Verifying..." : "Verify OTP"}
+                    {otpLoading
+                      ? "Verifying..."
+                      : "Verify OTP"}
                   </button>
 
                   <div className="mt-3 flex items-center justify-between text-sm">
