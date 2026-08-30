@@ -148,14 +148,17 @@ export default function RegisterPage() {
   function extractReqId(value: any): string {
     if (value == null) return "";
 
+    // MSG91 can return the request ID directly as a string.
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (!trimmed) return "";
 
       try {
-        return extractReqId(JSON.parse(trimmed));
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed === "string") return parsed.trim();
+        return extractReqId(parsed);
       } catch {
-        return "";
+        return trimmed;
       }
     }
 
@@ -171,19 +174,18 @@ export default function RegisterPage() {
 
     const keys = Object.keys(value);
 
-for (const key of keys) {
-  if (
-    ["reqid", "requestid", "message"].includes(key.toLowerCase())
-  ) {
-    const candidate = value[key];
+    for (const key of keys) {
+      const normalized = key.toLowerCase().replace(/[_-]/g, "");
 
-    if (candidate !== null && candidate !== undefined) {
-      const result = String(candidate).trim();
+      if (["reqid", "requestid"].includes(normalized)) {
+        const candidate = value[key];
 
-      if (result) return result;
+        if (candidate !== null && candidate !== undefined) {
+          const result = String(candidate).trim();
+          if (result) return result;
+        }
+      }
     }
-  }
-}
 
     for (const key of keys) {
       const found = extractReqId(value[key]);
@@ -196,13 +198,20 @@ for (const key of keys) {
   function extractAccessToken(value: any): string {
     if (value == null) return "";
 
+    // MSG91 can return the JWT directly as a string.
     if (typeof value === "string") {
       const trimmed = value.trim();
       if (!trimmed) return "";
 
       try {
-        return extractAccessToken(JSON.parse(trimmed));
+        const parsed = JSON.parse(trimmed);
+        if (typeof parsed === "string") return parsed.trim();
+        return extractAccessToken(parsed);
       } catch {
+        // A JWT is a non-JSON string with three dot-separated parts.
+        if (trimmed.split(".").length === 3) {
+          return trimmed;
+        }
         return "";
       }
     }
@@ -220,12 +229,11 @@ for (const key of keys) {
     const keys = Object.keys(value);
 
     for (const key of keys) {
-      if (
-        ["accesstoken", "access_token", "access-token", "token"].includes(
-          key.toLowerCase()
-        )
-      ) {
+      const normalized = key.toLowerCase().replace(/[_-]/g, "");
+
+      if (["accesstoken", "token"].includes(normalized)) {
         const candidate = value[key];
+
         if (typeof candidate === "string" && candidate.trim()) {
           return candidate.trim();
         }
